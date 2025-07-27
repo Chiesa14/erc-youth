@@ -1,8 +1,11 @@
 from typing import Any
 
+from fastapi import HTTPException
+from pydantic.v1 import NoneStr
 from sqlalchemy.orm import Session
 
 from app.models.family import Family
+from app.models.family_member import FamilyMember
 from app.models.user import User
 from app.schemas.user import UserCreate, RoleEnum, UserUpdate
 from app.core.security import get_password_hash
@@ -93,3 +96,36 @@ def update_user_password(db: Session, user: User, new_password: str) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def create_user_from_member_data(db: Session, member: FamilyMember, password: str) -> User:
+    """Create user specifically from family member data"""
+
+    # Generate access code for non-admin users
+    access_code = generate_unique_access_code(db)
+    hashed_pw = get_password_hash(password)
+
+    # Get or create family (should already exist)
+    family = db.query(Family).filter(Family.id == member.family_id).first()
+    if not family:
+        raise HTTPException(status_code=400, detail="Family not found.")
+
+    db_user = User(
+        full_name=member.name,
+        email=member.email,
+        hashed_password=hashed_pw,
+        gender=member.gender,
+        phone=member.phone,
+        family_category=family.category,
+        family_name=family.name,
+        role=RoleEnum.other,  # Default role
+        other=NoneStr,
+        profile_pic=NoneStr,
+        access_code=access_code,
+        family_id=family.id
+    )
+
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user

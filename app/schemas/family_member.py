@@ -73,3 +73,13 @@ class FamilyMemberOut(FamilyMemberBase):
             today.year - self.date_of_birth.year -
             ((today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day))
         )
+
+class MemberActivationRequest(BaseModel):
+    member_id: int
+    temp_password: str
+    new_password: str
+
+class MemberActivationResponse(BaseModel):
+    message: str
+    user_id: int
+    access_code: Optional[str] = None

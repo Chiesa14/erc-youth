@@ -1,10 +1,23 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Enum, ForeignKey, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Column, Integer, String, Boolean, Date, Enum, ForeignKey, UniqueConstraint, DateTime
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 from app.schemas.family_member import GraduationModeEnum,AccessPermissionEnum, EducationLevelEnum
 from app.schemas.user import GenderEnum
 
 
+class FamilyMemberInvitation(Base):
+    __tablename__ = "family_member_invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"))
+    temp_password = Column(String, nullable=False)
+    is_activated = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    activated_at = Column(DateTime, nullable=True)
+
+    member = relationship("FamilyMember", back_populates="invitation")
 
 class FamilyMemberPermission(Base):
     __tablename__ = "family_member_permissions"
@@ -43,4 +56,5 @@ class FamilyMember(Base):
     family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
     family = relationship("Family", back_populates="members")
     permissions = relationship("FamilyMemberPermission", cascade="all, delete", back_populates="member")
+    invitation = relationship("FamilyMemberInvitation", back_populates="member", uselist=False, cascade="all, delete")
 

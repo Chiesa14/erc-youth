@@ -1,5 +1,10 @@
+from datetime import datetime
+
 from sqlalchemy.orm import Session, joinedload
-from app.models.family_member import FamilyMember, FamilyMemberPermission
+
+from app.core.security import get_password_hash
+from app.models import Family
+from app.models.family_member import FamilyMember, FamilyMemberPermission, FamilyMemberInvitation
 from app.models.user import User
 from app.schemas.family_member import FamilyMemberUpdate, GrantAccessRequest, DelegatedAccessOut
 
@@ -7,6 +12,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.models.family_member import FamilyMember
 from app.schemas.family_member import FamilyMemberCreate
+from app.schemas.user import RoleEnum, UserCreate
+from app.services.email_service import EmailService
 
 
 def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMember:
@@ -36,6 +43,35 @@ def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMembe
     db.add(db_member)
     db.commit()
     db.refresh(db_member)
+
+    if member.email:
+        email_service = EmailService()
+        temp_password = email_service.generate_temporary_password()
+
+        # Get family info for email
+        family = db.query(Family).filter(Family.id == member.family_id).first()
+        family_name = family.name if family else "Your Family"
+
+        # Create invitation record
+        invitation = FamilyMemberInvitation(
+            member_id=db_member.id,
+            temp_password=get_password_hash(temp_password)  # Store hashed version
+        )
+        db.add(invitation)
+        db.commit()
+
+        # Send email
+        email_sent = email_service.send_invitation_email(
+            to_email=member.email,
+            member_name=member.name,
+            temp_password=temp_password,
+            family_name=family_name
+        )
+
+        if not email_sent:
+            # Optionally, you might want to handle email failure
+            print(f"Failed to send invitation email to {member.email}")
+
     return db_member
 
 
@@ -179,3 +215,68 @@ def revoke_member_permissions(
     ).delete()
 
     db.commit()
+
+
+def create_user_from_member(db: Session, member_id: int, new_password: str) -> User:
+    """Create a user account from an existing family member"""
+
+    # Get the family member and their invitation
+    member = db.query(FamilyMember).options(joinedload(FamilyMember.invitation)).filter(
+        FamilyMember.id == member_id
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Family member not found.")
+
+    if not member.email:
+        raise HTTPException(status_code=400, detail="Family member must have an email to create user account.")
+
+    if not member.invitation:
+        raise HTTPException(status_code=400, detail="No invitation found for this member.")
+
+    if member.invitation.is_activated:
+        raise HTTPException(status_code=400, detail="This invitation has already been used.")
+
+    # Check if user already exists with this email
+    existing_user = db.query(User).filter(User.email == member.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User account already exists with this email.")
+
+    # Create user from member data
+    user_create = UserCreate(
+        full_name=member.name,
+        email=member.email,
+        password=new_password,
+        gender=member.gender,
+        phone=member.phone,
+        family_category=member.family.category,
+        family_name=member.family.name,
+        role=RoleEnum.other,
+        other=None,
+        profile_pic=None
+    )
+
+    # Create the user
+    from app.controllers.user import create_user
+    db_user = create_user(db, user_create)
+
+    # Mark invitation as activated
+    member.invitation.is_activated = True
+    member.invitation.activated_at = datetime.utcnow()
+    db.commit()
+
+    return db_user
+
+
+def verify_temp_password(db: Session, member_id: int, temp_password: str) -> bool:
+    """Verify temporary password for a family member"""
+    invitation = db.query(FamilyMemberInvitation).filter(
+        FamilyMemberInvitation.member_id == member_id,
+        FamilyMemberInvitation.is_activated == False
+    ).first()
+
+    if not invitation:
+        return False
+
+    from app.core.security import verify_password
+    return verify_password(temp_password, invitation.temp_password)
