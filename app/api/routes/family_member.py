@@ -1,5 +1,7 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.controllers import family_member as crud_member
 from app.controllers.family_member import verify_temp_password, create_user_from_member
@@ -7,14 +9,14 @@ from app.db.session import get_db
 from app.core.security import get_current_active_user, get_password_hash
 from app.core.permissions import require_parent
 from app.models import Family
-from app.models.family_member import FamilyMemberInvitation
+from app.models.family_member import FamilyMemberInvitation, FamilyMember
 from app.models.user import User
 from app.schemas.family_member import (
     FamilyMemberCreate,
     FamilyMemberOut,
     FamilyMemberUpdate,
     GrantAccessRequest,
-    DelegatedAccessOut, MemberActivationResponse, MemberActivationRequest,
+    DelegatedAccessOut, MemberActivationResponse, MemberActivationRequest, AccessPermissionEnum,
 )
 from app.services.email_service import EmailService
 
@@ -221,8 +223,38 @@ def resend_invitation(
         to_email=member.email,
         member_name=member.name,
         temp_password=temp_password,
-        family_name=family.name if family else "Your Family"
+        family_name=family.name if family else "Your Family",
+        member_id=member.id,
     )
 
     if not email_sent:
         raise HTTPException(status_code=500, detail="Failed to send invitation email.")
+
+
+@router.get("/access/permissions", response_model=List[str])
+def list_available_permissions():
+    return [perm.value for perm in AccessPermissionEnum]
+
+@router.get("/access/{member_id}", response_model=DelegatedAccessOut)
+def get_member_permissions(
+    member_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    require_parent(current_user)
+
+    if not current_user.family_id:
+        raise HTTPException(status_code=400, detail="No family assigned to user.")
+
+    member = db.query(FamilyMember).options(joinedload(FamilyMember.permissions)) \
+        .filter(FamilyMember.id == member_id, FamilyMember.family_id == current_user.family_id).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Family member not found.")
+
+    return DelegatedAccessOut(
+        member_id=member.id,
+        name=member.name,
+        permissions=[perm.permission for perm in member.permissions]
+    )
+

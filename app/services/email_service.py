@@ -1,4 +1,5 @@
 import smtplib
+import urllib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
@@ -20,21 +21,34 @@ class EmailService:
         characters = string.ascii_letters + string.digits + "!@#$%^&*"
         return ''.join(secrets.choice(characters) for _ in range(length))
 
-    def send_invitation_email(self, to_email: str, member_name: str, temp_password: str, family_name: str) -> bool:
-        """Send invitation email to new family member"""
+    def send_invitation_email(
+            self,
+            to_email: str,
+            member_name: str,
+            temp_password: str,
+            family_name: str,
+            member_id: int,
+            frontend_url: str = "http://localhost:8080/change-password"
+    ) -> bool:
+        """Send invitation email to new family member with activation link"""
         try:
             msg = MIMEMultipart()
             msg['From'] = self.from_email
             msg['To'] = to_email
             msg['Subject'] = f"Welcome to {family_name} - Set Up Your Account"
 
+            encoded_temp_password = urllib.parse.quote(temp_password)
+            activation_link = f"{frontend_url}?member_id={member_id}&temp_password={encoded_temp_password}"
+
             body = f"""
             Dear {member_name},
 
             You have been added to the {family_name} family system. To complete your account setup, please follow these steps:
 
-            1. Use this temporary password to log in: {temp_password}
-            2. After logging in, you will be prompted to create your own secure password
+            1. Click this link to set your password and activate your account:
+               {activation_link}
+
+            2. Your temporary password is: {temp_password}
             3. Your email address is: {to_email}
 
             Please keep this information secure and change your password immediately after your first login.
@@ -50,8 +64,7 @@ class EmailService:
             server = smtplib.SMTP(self.smtp_server, self.smtp_port)
             server.starttls()
             server.login(self.smtp_username, self.smtp_password)
-            text = msg.as_string()
-            server.sendmail(self.from_email, to_email, text)
+            server.sendmail(self.from_email, to_email, msg.as_string())
             server.quit()
 
             return True

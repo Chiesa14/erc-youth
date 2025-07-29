@@ -66,7 +66,8 @@ def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMembe
             to_email=member.email,
             member_name=member.name,
             temp_password=temp_password,
-            family_name=family_name
+            family_name=family_name,
+            member_id=db_member.id,
         )
 
         if not email_sent:
