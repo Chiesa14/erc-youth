@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
+from typing import List, Any
 
 from app.models.family import Family
 from app.models.user import User
-from app.schemas.user import UserCreate, RoleEnum, UserUpdate
+from app.schemas.user import UserCreate, RoleEnum, UserUpdate, AdminUserUpdate
 from app.core.security import get_password_hash
 import random
 
@@ -37,7 +38,10 @@ def create_user(db: Session, user: UserCreate):
     else:
         hashed_pw = get_password_hash(user.password)
 
-    family = get_or_create_family(db, user.family_category.value, user.family_name)
+    family_id = None
+    if user.family_category is not None and user.family_name is not None:
+        family = get_or_create_family(db, user.family_category.value, user.family_name)
+        family_id = family.id
 
     db_user = User(
         full_name=user.full_name,
@@ -51,7 +55,7 @@ def create_user(db: Session, user: UserCreate):
         other=user.other,
         profile_pic=user.profile_pic,
         access_code=access_code,
-        family_id=family.id
+        family_id=family_id
     )
 
     db.add(db_user)
@@ -91,3 +95,50 @@ def update_user_password(db: Session, user: User, new_password: str) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def get_all_users(db: Session) -> list[type[User]]:
+    """
+    Retrieve all users from the database.
+    
+    Args:
+        db: Database session
+        
+    Returns:
+        List of all users
+    """
+    return db.query(User).all()
+
+
+def delete_user(db: Session, user_id: int) -> None:
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("User not found")
+    db.delete(user)
+    db.commit()
+
+
+def admin_update_user(db: Session, user_id: int, updates: AdminUserUpdate) -> type[User]:
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise ValueError("User not found")
+
+    # Update only provided fields
+    for field, value in updates.dict(exclude_unset=True).items():
+        setattr(db_user, field, value)
+
+    # Handle family relation if both category and name are updated
+    if ('family_category' in updates.dict(exclude_unset=True)
+        and 'family_name' in updates.dict(exclude_unset=True)):
+        family = get_or_create_family(
+            db,
+            updates.family_category.value,
+            updates.family_name
+        )
+        db_user.family_id = family.id
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+

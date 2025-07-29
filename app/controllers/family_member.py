@@ -14,6 +14,7 @@ from app.models.family_member import FamilyMember
 from app.schemas.family_member import FamilyMemberCreate
 from app.schemas.user import RoleEnum, UserCreate
 from app.services.email_service import EmailService
+from app.controllers.user import create_user, update_user_password
 
 
 def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMember:
@@ -257,8 +258,10 @@ def create_user_from_member(db: Session, member_id: int, new_password: str) -> U
     )
 
     # Create the user
-    from app.controllers.user import create_user
     db_user = create_user(db, user_create)
+
+    # ✅ Update password to the correct one (since access_code was used initially)
+    update_user_password(db, db_user, new_password)
 
     # Mark invitation as activated
     member.invitation.is_activated = True

@@ -22,8 +22,8 @@ class UserCreate(BaseModel):
     password: Optional[str] = None
     gender: GenderEnum
     phone: str
-    family_category: FamilyCategoryEnum
-    family_name: str
+    family_category: Optional[FamilyCategoryEnum] = None
+    family_name: Optional[str] = None
     role: RoleEnum
     other: Optional[str] = None
     profile_pic: Optional[str] = None  # Assume frontend sends a URL for now
@@ -34,8 +34,9 @@ class UserOut(BaseModel):
     email: EmailStr
     gender: GenderEnum
     phone: str
-    family_category: FamilyCategoryEnum
-    family_name: str
+    family_id: int
+    family_category: Optional[FamilyCategoryEnum] = None
+    family_name: Optional[str] = None
     role: RoleEnum
     other: Optional[str]
     biography: Optional[str]
@@ -60,3 +61,15 @@ class UserUpdate(BaseModel):
 
 class PasswordUpdate(BaseModel):
     new_password: constr(min_length=6)
+
+class AdminUserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    gender: Optional[GenderEnum] = None
+    phone: Optional[str] = None
+    family_category: Optional[FamilyCategoryEnum] = None
+    family_name: Optional[str] = None
+    role: Optional[RoleEnum] = None
+    other: Optional[str] = None
+    profile_pic: Optional[str] = None
+    biography: Optional[str] = None

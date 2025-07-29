@@ -165,8 +165,6 @@ def activate_member_account(
         request: MemberActivationRequest,
         db: Session = Depends(get_db),
 ):
-    """Allow family member to activate their account with temporary password"""
-
     # Verify temporary password
     if not verify_temp_password(db, request.member_id, request.temp_password):
         raise HTTPException(status_code=400, detail="Invalid temporary password or invitation already used.")
