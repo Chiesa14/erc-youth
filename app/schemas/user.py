@@ -34,7 +34,7 @@ class UserOut(BaseModel):
     email: EmailStr
     gender: GenderEnum
     phone: str
-    family_id: int
+    family_id: Optional[int] = None
     family_category: Optional[FamilyCategoryEnum] = None
     family_name: Optional[str] = None
     role: RoleEnum

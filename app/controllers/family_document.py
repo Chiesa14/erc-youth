@@ -2,14 +2,14 @@ import os
 import uuid
 from sqlalchemy.orm import Session
 from app.models.family_document import FamilyDocument
-from app.schemas.family_document import DocumentType
+from app.schemas.family_document import DocumentType, ReportStatus, LetterStatus
 from datetime import datetime
 from fastapi import UploadFile, HTTPException
 
 UPLOAD_DIR = "uploads/documents"
 
 
-def save_document_to_disk(family_id: int, file: UploadFile, type: DocumentType) -> str:
+def save_document_to_disk(family_id: int, file: UploadFile, type: DocumentType) -> tuple[str, str]:
     ext = file.filename.split(".")[-1]
     file_id = str(uuid.uuid4())
     filename = f"{file_id}_{type}.{ext}"
@@ -23,17 +23,25 @@ def save_document_to_disk(family_id: int, file: UploadFile, type: DocumentType) 
     return file_path, filename
 
 
+
 def upload_family_document(
         db: Session, family_id: int, type: DocumentType, file: UploadFile
 ) -> FamilyDocument:
     file_path, filename = save_document_to_disk(family_id, file, type)
+    if type == DocumentType.report:
+        status = ReportStatus.pending.value
+    elif type == DocumentType.letter:
+        status = LetterStatus.pending.value
+    else:
+        raise HTTPException(status_code=400, detail="Invalid document type")
 
     db_doc = FamilyDocument(
         family_id=family_id,
         file_path=file_path,
         type=type.value,
         original_filename=file.filename,
-        uploaded_at=datetime.utcnow()
+        uploaded_at=datetime.utcnow(),
+        status=status
     )
     db.add(db_doc)
     db.commit()
@@ -41,7 +49,7 @@ def upload_family_document(
     return db_doc
 
 
-def get_document_by_id(db: Session, doc_id: int, family_id: int) -> FamilyDocument:
+def get_document_by_id(db: Session, doc_id: int, family_id: int) -> type[FamilyDocument] | None:
     doc = db.query(FamilyDocument).filter_by(id=doc_id, family_id=family_id).first()
     if not doc or not os.path.exists(doc.file_path):
         raise HTTPException(status_code=404, detail="Document not found")
