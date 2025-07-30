@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api.routes import user, auth, family_member, family_activity ,family_document
+from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document
 from dotenv import load_dotenv
 
 from app.db.init_db import init_db
@@ -32,3 +32,9 @@ app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(family_member.router, prefix="/family/family-members", tags=["Family Members"])
 app.include_router(family_activity.router, prefix="/family/family-activities", tags=["Activities"])
 app.include_router(family_document.router, prefix="/family/family-documents", tags=["Documents"])
+app.include_router(announcement.router, prefix="/announcement", tags=["Announcement"])
+app.include_router(shared_document.router, prefix="/shared_document", tags=["Shared Document"])
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the API"}

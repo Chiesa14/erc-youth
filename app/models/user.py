@@ -29,5 +29,7 @@ class User(Base):
 
     family_id = Column(Integer, ForeignKey("families.id"), nullable=True)
     family = relationship("Family", back_populates="users")
+    announcements = relationship("Announcement", back_populates="user", cascade="all, delete-orphan")
+
 
 

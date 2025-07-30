@@ -9,7 +9,7 @@ from sqlalchemy import String
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, get_db
 from app.models.user import User
 
 # Password hashing setup
@@ -31,13 +31,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 # OAuth2 setup
 oauth2_scheme = HTTPBearer()
 
-# DB dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # Extract current user from token
 def get_current_user(
