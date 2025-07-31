@@ -19,3 +19,14 @@ def get_admin_user(current_user: User = Depends(get_current_user)):
             detail="Not authorized: Admin access required"
         )
     return current_user
+
+def get_pastor_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Dependency to ensure the current user has church_pastor role
+    """
+    if current_user.role != RoleEnum.church_pastor:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Only church pastors can manage prayer chains."
+        )
+    return current_user

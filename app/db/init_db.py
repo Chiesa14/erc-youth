@@ -19,15 +19,32 @@ def init_db():
             full_name="Admin User",
             email=admin_email,
             hashed_password=get_password_hash("admin!123"),
-            gender=GenderEnum.male,            # required enum
-            phone="+250796198140",                # fill with fake or valid phone
+            gender=GenderEnum.male,
+            phone="+250796198140",
             role=RoleEnum.admin,
         )
         db.add(admin_user)
-
-        db.commit()
         print("Default admin user created.")
     else:
         print("Admin user already exists.")
 
+    # Check if church pastor user already exists
+    pastor_email = "pastor@church.com"
+    pastor = db.query(User).filter(User.email == pastor_email).first()
+    if not pastor:
+        pastor_user = User(
+            full_name="Church Pastor",
+            email=pastor_email,
+            hashed_password=get_password_hash("pastor!123"),
+            gender=GenderEnum.male,  # You can change this as needed
+            phone="+250796198141",
+            role=RoleEnum.church_pastor,
+            biography="Church pastor responsible for spiritual guidance and church activities."
+        )
+        db.add(pastor_user)
+        print("Default church pastor user created.")
+    else:
+        print("Church pastor user already exists.")
+
+    db.commit()
     db.close()

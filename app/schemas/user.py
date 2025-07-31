@@ -6,6 +6,7 @@ class RoleEnum(str, Enum):
     admin = "admin"
     pere = "Père"
     mere = "Mère"
+    church_pastor = "Pastor"
     other = "Other"
 
 class GenderEnum(str, Enum):
@@ -45,19 +46,16 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
-
 class UserOutWithCode(UserOut):
     access_code: Optional[str] = None
 
     class Config:
         from_attributes = True
 
-
 class UserUpdate(BaseModel):
     biography: Optional[str] = None
     other: Optional[str] = None
     profile_pic: Optional[str] = None
-
 
 class PasswordUpdate(BaseModel):
     new_password: constr(min_length=6)

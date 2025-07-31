@@ -12,3 +12,4 @@ class Family(Base):
 
     users = relationship("User", back_populates="family")
     members = relationship("FamilyMember", back_populates="family")  # <-- ADD THIS
+    prayer_chains = relationship("PrayerChain", back_populates="family")
