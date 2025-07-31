@@ -1,7 +1,7 @@
 import os
 import uuid
 from typing import Optional
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, UploadFile,Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -116,9 +116,50 @@ async def create_announcement(
     return convert_to_announcement_out(db_announcement, db)
 
 
-async def get_all_announcements(db: Session) -> list[AnnouncementOut]:
-    """Get all announcements"""
+from sqlalchemy.orm import Session
+from typing import Optional
+from fastapi import Depends
+from app.models.announcement import Announcement, AnnouncementView
+from app.models.user import User
+from app.schemas.announcement import AnnouncementOut
+import uuid
+
+
+# Assuming you have a way to get the session_id from the request (e.g., via cookies)
+async def get_all_announcements(db: Session, current_user: Optional[User] = None, session_id: Optional[str] = None) -> \
+list[AnnouncementOut]:
     announcements = db.query(Announcement).all()
+
+    for announcement in announcements:
+        if current_user:
+            existing_view = db.query(AnnouncementView).filter(
+                AnnouncementView.announcement_id == announcement.id,
+                AnnouncementView.user_id == current_user.id
+            ).first()
+            if not existing_view:
+                view = AnnouncementView(
+                    announcement_id=announcement.id,
+                    user_id=current_user.id,
+                    session_id=None
+                )
+                db.add(view)
+        else:
+            # Check for existing view by session_id
+            if session_id:
+                existing_view = db.query(AnnouncementView).filter(
+                    AnnouncementView.announcement_id == announcement.id,
+                    AnnouncementView.session_id == session_id
+                ).first()
+                if not existing_view:
+                    view = AnnouncementView(
+                        announcement_id=announcement.id,
+                        user_id=None,
+                        session_id=session_id
+                    )
+                    db.add(view)
+
+    db.commit()
+
     return [convert_to_announcement_out(ann, db) for ann in announcements]
 
 
@@ -202,7 +243,8 @@ async def delete_announcement(announcement_id: int, db: Session, current_user: U
     return {"message": "Announcement deleted successfully"}
 
 
-async def download_flyer(announcement_id: int, db: Session):
+# Updated service function
+async def download_flyer(announcement_id: int, db: Session, request: Request = None):
     """Download announcement flyer"""
     announcement = db.query(Announcement).filter(Announcement.id == announcement_id).first()
     if not announcement:
@@ -219,18 +261,18 @@ async def download_flyer(announcement_id: int, db: Session):
     flyer.downloads += 1
     db.commit()
 
-    # Return file response (you'll need to implement this based on your file serving strategy)
-    from fastapi.responses import FileResponse
-
+    # Check if file exists
     if not os.path.exists(flyer.file_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
+
+    # Create FileResponse
+    from fastapi.responses import FileResponse
 
     return FileResponse(
         path=flyer.file_path,
         filename=flyer.original_filename,
         media_type=flyer.mime_type or 'application/octet-stream'
     )
-
 
 def convert_to_announcement_out(announcement: Announcement, db: Session) -> AnnouncementOut:
     # Get view count
