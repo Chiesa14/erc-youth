@@ -4,6 +4,7 @@ from datetime import date
 from enum import Enum
 
 from app.schemas.user import GenderEnum
+from app.utils.timestamps import TimestampMixin
 
 class AccessPermissionEnum(str, Enum):
     submit_reports = "submit_reports"
@@ -59,7 +60,7 @@ class FamilyMemberCreate(FamilyMemberBase):
 class FamilyMemberUpdate(FamilyMemberBase):
     pass
 
-class FamilyMemberOut(FamilyMemberBase):
+class FamilyMemberOut(FamilyMemberBase, TimestampMixin):
     id: int
     family_id: int
 

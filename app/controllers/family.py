@@ -10,6 +10,7 @@ from app.models.family_activity import Activity
 from app.schemas.family import FamilyResponse, FamilyCreate, FamilyUpdate, FamilyMemberCreate, ActivityCreate, \
     ActivityResponse
 from app.schemas.user import RoleEnum, GenderEnum
+from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
 
 
 def get_all_families(db: Session) -> List[FamilyResponse]:
@@ -174,6 +175,7 @@ def create_family(db: Session, family: FamilyCreate) -> FamilyResponse:
 
     # Create new family if no duplicate is found
     db_family = Family(category=family.category, name=family.name)
+    # created_at and updated_at will be automatically set by the middleware
     db.add(db_family)
     db.commit()
     db.refresh(db_family)
@@ -188,6 +190,7 @@ def update_family(db: Session, family_id: int, family: FamilyUpdate) -> FamilyRe
     for key, value in update_data.items():
         setattr(db_family, key, value)
 
+    # updated_at will be automatically set by the middleware
     db.commit()
     db.refresh(db_family)
     return get_family_by_id(db, db_family.id)

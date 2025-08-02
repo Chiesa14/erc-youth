@@ -3,9 +3,13 @@ from app.models.user import User
 from app.schemas.user import RoleEnum, GenderEnum, FamilyCategoryEnum
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal, Base, engine
+from app.core.timestamp_middleware import init_timestamp_middleware
 
 
 def init_db():
+    # Initialize timestamp middleware
+    init_timestamp_middleware()
+    
     # Create tables
     Base.metadata.create_all(bind=engine)
 

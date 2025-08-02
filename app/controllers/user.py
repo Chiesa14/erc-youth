@@ -5,6 +5,7 @@ from app.models.family import Family
 from app.models.user import User
 from app.schemas.user import UserCreate, RoleEnum, UserUpdate, AdminUserUpdate
 from app.core.security import get_password_hash
+from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
 import random
 
 
@@ -78,6 +79,7 @@ def update_user_profile(db: Session, user: User, updates: UserUpdate) -> type[Us
     if updates.profile_pic is not None:
         db_user.profile_pic = updates.profile_pic
 
+    # updated_at will be automatically set by the middleware
     db.commit()
     db.refresh(db_user)
     return db_user
@@ -86,12 +88,14 @@ def reset_user_access_code(db: Session, user: User) -> tuple[User, str]:
     new_code = generate_unique_access_code(db)
     user.access_code = new_code
     user.hashed_password = get_password_hash(new_code)
+    # updated_at will be automatically set by the middleware
     db.commit()
     db.refresh(user)
     return user, new_code
 
 def update_user_password(db: Session, user: User, new_password: str) -> User:
     user.hashed_password = get_password_hash(new_password)
+    # updated_at will be automatically set by the middleware
     db.commit()
     db.refresh(user)
     return user
@@ -137,6 +141,7 @@ def admin_update_user(db: Session, user_id: int, updates: AdminUserUpdate) -> ty
         )
         db_user.family_id = family.id
 
+    # updated_at will be automatically set by the middleware
     db.commit()
     db.refresh(db_user)
     return db_user

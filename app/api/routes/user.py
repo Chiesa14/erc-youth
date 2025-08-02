@@ -1,11 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import app.controllers.user as crud_user
 import app.schemas.user as user_schema
 from app.db.session import get_db
 from app.core.security import get_current_active_user, get_current_user
 from app.models.user import User
+from app.utils.timestamps import (
+    parse_timestamp_filters,
+    apply_timestamp_filters,
+    apply_timestamp_sorting,
+    TimestampQueryParams
+)
 
 router = APIRouter(tags=["Users"])
 
@@ -84,18 +90,32 @@ def admin_update_user_password(
 def get_all_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    created_after: Optional[str] = Query(None, description="Filter users created after this timestamp (ISO 8601)"),
+    created_before: Optional[str] = Query(None, description="Filter users created before this timestamp (ISO 8601)"),
+    updated_after: Optional[str] = Query(None, description="Filter users updated after this timestamp (ISO 8601)"),
+    updated_before: Optional[str] = Query(None, description="Filter users updated before this timestamp (ISO 8601)"),
+    sort_by: Optional[str] = Query(None, description="Sort by timestamp field", enum=["created_at", "updated_at"]),
+    sort_order: Optional[str] = Query("desc", description="Sort order", enum=["asc", "desc"]),
 ):
     """
-    Retrieve all users in the system.
+    Retrieve all users in the system with timestamp filtering and sorting.
     Only accessible to admin users.
     """
     if current_user.role != "admin":
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can retrieve all users."
         )
     
-    users = crud_user.get_all_users(db)
+    # Parse timestamp filters
+    filters = parse_timestamp_filters(created_after, created_before, updated_after, updated_before)
+    
+    # Build query with filters and sorting
+    query = db.query(User)
+    query = apply_timestamp_filters(query, User, filters)
+    query = apply_timestamp_sorting(query, User, sort_by, sort_order)
+    
+    users = query.all()
     return users
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain
+from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics
 from dotenv import load_dotenv
 
 from app.db.init_db import init_db
@@ -40,3 +40,4 @@ app.include_router(family_document.router, prefix="/family/family-documents", ta
 app.include_router(announcement.router, prefix="/announcements", tags=["Announcements"])
 app.include_router(shared_document.router, prefix="/shared-documents", tags=["Shared Documents"])
 app.include_router(prayer_chain.router, prefix="/prayer-chains", tags=["Prayer Chains"])
+app.include_router(timestamp_analytics.router, prefix="/analytics/timestamps", tags=["Timestamp Analytics"])

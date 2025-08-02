@@ -1,6 +1,7 @@
 # app/models/prayer_chain.py
-from sqlalchemy import Column, Integer, ForeignKey, String, Time, Enum as SQLEnum
+from sqlalchemy import Column, Integer, ForeignKey, String, Time, Enum as SQLEnum, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.db.session import Base
 from enum import Enum
 
@@ -21,6 +22,10 @@ class PrayerChain(Base):
     id = Column(Integer, primary_key=True, index=True)
     family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
 
+    # Timestamp fields
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
     # Relationships
     family = relationship("Family", back_populates="prayer_chains")
     schedules = relationship("Schedule", back_populates="prayer_chain", cascade="all, delete-orphan")
@@ -34,6 +39,10 @@ class Schedule(Base):
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
     prayer_chain_id = Column(Integer, ForeignKey("prayer_chains.id"), nullable=False)
+
+    # Timestamp fields
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     prayer_chain = relationship("PrayerChain", back_populates="schedules")

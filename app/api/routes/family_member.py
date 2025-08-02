@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.controllers import family_member as crud_member
@@ -19,6 +19,11 @@ from app.schemas.family_member import (
     DelegatedAccessOut, MemberActivationResponse, MemberActivationRequest, AccessPermissionEnum,
 )
 from app.services.email_service import EmailService
+from app.utils.timestamps import (
+    parse_timestamp_filters,
+    apply_timestamp_filters,
+    apply_timestamp_sorting
+)
 
 router = APIRouter(tags=["Family Members"])
 
@@ -106,13 +111,31 @@ def create_member(
 def list_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    created_after: Optional[str] = Query(None, description="Filter members created after this timestamp (ISO 8601)"),
+    created_before: Optional[str] = Query(None, description="Filter members created before this timestamp (ISO 8601)"),
+    updated_after: Optional[str] = Query(None, description="Filter members updated after this timestamp (ISO 8601)"),
+    updated_before: Optional[str] = Query(None, description="Filter members updated before this timestamp (ISO 8601)"),
+    sort_by: Optional[str] = Query(None, description="Sort by timestamp field", enum=["created_at", "updated_at"]),
+    sort_order: Optional[str] = Query("desc", description="Sort order", enum=["asc", "desc"]),
 ):
     require_parent(current_user)
 
     if not current_user.family_id:
         raise HTTPException(status_code=400, detail="User is not assigned to any family.")
 
-    return crud_member.get_family_members_by_family_id(db, current_user.family_id)
+    # If no timestamp filters are provided, use the original function
+    if not any([created_after, created_before, updated_after, updated_before, sort_by]):
+        return crud_member.get_family_members_by_family_id(db, current_user.family_id)
+    
+    # Parse timestamp filters
+    filters = parse_timestamp_filters(created_after, created_before, updated_after, updated_before)
+    
+    # Build query with filters and sorting
+    query = db.query(FamilyMember).filter(FamilyMember.family_id == current_user.family_id)
+    query = apply_timestamp_filters(query, FamilyMember, filters)
+    query = apply_timestamp_sorting(query, FamilyMember, sort_by, sort_order)
+    
+    return query.all()
 
 
 @router.get("/{member_id}", response_model=FamilyMemberOut)

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import Column, Integer, String, Boolean, Date, Enum, ForeignKey, UniqueConstraint, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from app.db.session import Base
 from app.schemas.family_member import GraduationModeEnum,AccessPermissionEnum, EducationLevelEnum
 from app.schemas.user import GenderEnum
@@ -25,6 +26,10 @@ class FamilyMemberPermission(Base):
     id = Column(Integer, primary_key=True, index=True)
     member_id = Column(Integer, ForeignKey("family_members.id", ondelete="CASCADE"))
     permission = Column(Enum(AccessPermissionEnum), nullable=False)
+
+    # Timestamp fields
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     member = relationship("FamilyMember", back_populates="permissions")
 
@@ -52,6 +57,10 @@ class FamilyMember(Base):
     year_of_graduation = Column(Integer)
     graduation_mode = Column(Enum(GraduationModeEnum),nullable=True)
     parental_status = Column(Boolean)
+
+    # Timestamp fields
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
     family = relationship("Family", back_populates="members")

@@ -1,6 +1,8 @@
 from pydantic import BaseModel, EmailStr, constr
 from enum import Enum
 from typing import Optional
+from datetime import datetime
+from app.utils.timestamps import TimestampMixin
 
 class RoleEnum(str, Enum):
     admin = "admin"
@@ -29,7 +31,7 @@ class UserCreate(BaseModel):
     other: Optional[str] = None
     profile_pic: Optional[str] = None  # Assume frontend sends a URL for now
 
-class UserOut(BaseModel):
+class UserOut(BaseModel, TimestampMixin):  # Now this works since TimestampMixin is not a BaseModel
     id: int
     full_name: str
     email: EmailStr
@@ -45,6 +47,9 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
 
 class UserOutWithCode(UserOut):
     access_code: Optional[str] = None

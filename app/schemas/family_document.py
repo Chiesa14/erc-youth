@@ -1,6 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel, field_serializer
 from datetime import datetime
+from app.utils.timestamps import TimestampMixin
 
 
 class DocumentType(str, Enum):
@@ -16,7 +17,7 @@ class LetterStatus(str, Enum):
     reviewed = "reviewed"
     approved = "approved"
 
-class DocumentOut(BaseModel):
+class DocumentOut(BaseModel, TimestampMixin):
     id: int
     family_id: int
     type: DocumentType

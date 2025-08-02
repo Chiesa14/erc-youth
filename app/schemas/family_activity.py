@@ -2,6 +2,7 @@ from enum import Enum
 from pydantic import BaseModel
 from datetime import date
 from typing import Optional
+from app.utils.timestamps import TimestampMixin
 
 
 class ActivityCategoryEnum(str, Enum):
@@ -51,7 +52,7 @@ class ActivityUpdate(BaseModel):
     type: Optional[str]
     description: Optional[str]
 
-class ActivityOut(ActivityBase):
+class ActivityOut(ActivityBase, TimestampMixin):
     id: int
 
     class Config:

@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import time
 from enum import Enum
+from app.utils.timestamps import TimestampMixin
 
 
 class DayEnum(str, Enum):
@@ -31,7 +32,7 @@ class ScheduleUpdate(BaseModel):
     end_time: Optional[time] = None
 
 
-class ScheduleResponse(ScheduleBase):
+class ScheduleResponse(ScheduleBase, TimestampMixin):
     id: int
     prayer_chain_id: int
 
@@ -73,7 +74,7 @@ class PrayerChainUpdate(BaseModel):
     family_id: Optional[int] = None
 
 
-class PrayerChainResponse(PrayerChainBase):
+class PrayerChainResponse(PrayerChainBase, TimestampMixin):
     id: int
     family_name: str
     family_details: FamilyDetails

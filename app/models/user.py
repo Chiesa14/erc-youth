@@ -1,6 +1,7 @@
 from pydantic import EmailStr
-from sqlalchemy import Column, Integer, String, Enum, ForeignKey
+from sqlalchemy import Column, Integer, String, Enum, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from app.db.session import Base
 from app.schemas.user import GenderEnum,FamilyCategoryEnum,RoleEnum
@@ -26,6 +27,10 @@ class User(Base):
     access_code = Column(String(4), unique=True, index=True, nullable=True)
 
     biography = Column(String, nullable=True)  # optional biography field
+
+    # Timestamp fields
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     family_id = Column(Integer, ForeignKey("families.id"), nullable=True)
     family = relationship("Family", back_populates="users")

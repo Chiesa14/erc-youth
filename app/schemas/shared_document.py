@@ -1,6 +1,7 @@
 from pydantic import BaseModel, computed_field
 from datetime import datetime
 from typing import Optional
+from app.utils.timestamps import TimestampMixin
 
 
 class SharedDocumentBase(BaseModel):
@@ -20,7 +21,7 @@ class SharedDocumentUpdate(BaseModel):
     is_public: Optional[bool] = None
 
 
-class SharedDocumentOut(SharedDocumentBase):
+class SharedDocumentOut(SharedDocumentBase, TimestampMixin):
     id: int
     original_filename: str
     mime_type: Optional[str] = None

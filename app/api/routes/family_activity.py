@@ -1,12 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.api.routes.family_member import require_parent
 from app.db.session import get_db
 from app.models.user import User
+from app.models.family_activity import Activity
 from app.core.security import get_current_active_user
 import app.controllers.family_activity as crud_activity
 import app.schemas.family_activity as activity_schema
+from app.utils.timestamps import (
+    parse_timestamp_filters,
+    apply_timestamp_filters,
+    apply_timestamp_sorting
+)
 
 router = APIRouter(tags=["Activities"])
 
@@ -34,11 +41,29 @@ def read_activities_for_family(
     family_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    created_after: Optional[str] = Query(None, description="Filter activities created after this timestamp (ISO 8601)"),
+    created_before: Optional[str] = Query(None, description="Filter activities created before this timestamp (ISO 8601)"),
+    updated_after: Optional[str] = Query(None, description="Filter activities updated after this timestamp (ISO 8601)"),
+    updated_before: Optional[str] = Query(None, description="Filter activities updated before this timestamp (ISO 8601)"),
+    sort_by: Optional[str] = Query(None, description="Sort by timestamp field", enum=["created_at", "updated_at"]),
+    sort_order: Optional[str] = Query("desc", description="Sort order", enum=["asc", "desc"]),
 ):
     if current_user.family_id != family_id:
         raise HTTPException(status_code=403, detail="Not authorized to view activities for this family.")
 
-    return crud_activity.get_activities_by_family(db, family_id)
+    # If no timestamp filters are provided, use the original function
+    if not any([created_after, created_before, updated_after, updated_before, sort_by]):
+        return crud_activity.get_activities_by_family(db, family_id)
+    
+    # Parse timestamp filters
+    filters = parse_timestamp_filters(created_after, created_before, updated_after, updated_before)
+    
+    # Build query with filters and sorting
+    query = db.query(Activity).filter(Activity.family_id == family_id)
+    query = apply_timestamp_filters(query, Activity, filters)
+    query = apply_timestamp_sorting(query, Activity, sort_by, sort_order)
+    
+    return query.all()
 
 
 @router.get("/{activity_id}", response_model=activity_schema.ActivityOut)
@@ -76,6 +101,7 @@ def update_activity(
     for field, value in updated_data.dict(exclude_unset=True).items():
         setattr(activity, field, value)
 
+    # updated_at will be automatically set by the middleware
     db.commit()
     db.refresh(activity)
     return activity

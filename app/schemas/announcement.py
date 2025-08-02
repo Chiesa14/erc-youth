@@ -2,6 +2,7 @@ from pydantic import BaseModel, computed_field
 from datetime import datetime
 from enum import Enum
 from typing import Optional
+from app.utils.timestamps import TimestampMixin
 
 class AnnouncementType(str, Enum):
     important = "important"
@@ -21,11 +22,9 @@ class AnnouncementUpdate(BaseModel):
     content: Optional[str] = None
     type: Optional[AnnouncementType] = None
 
-class AnnouncementOut(AnnouncementBase):
+class AnnouncementOut(AnnouncementBase, TimestampMixin):
     id: int
     user_id: int
-    created_at: datetime
-    updated_at: datetime
     flyer_id: Optional[int] = None
 
     _view_count: int = 0  # Private field for storage, initialize with default

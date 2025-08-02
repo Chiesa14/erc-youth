@@ -4,8 +4,9 @@ from datetime import date
 from app.schemas.family_activity import ActivityStatusEnum, ActivityCategoryEnum
 from app.schemas.family_member import GraduationModeEnum, EducationLevelEnum
 from app.schemas.user import GenderEnum
+from app.utils.timestamps import TimestampMixin
 
-class ActivityResponse(BaseModel):
+class ActivityResponse(BaseModel, TimestampMixin):
     id: int
     date: date
     status: ActivityStatusEnum
@@ -16,7 +17,7 @@ class ActivityResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class FamilyResponse(BaseModel):
+class FamilyResponse(BaseModel, TimestampMixin):
     id: int
     name: str
     category: str
