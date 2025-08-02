@@ -6,6 +6,7 @@ import app.schemas.user as user_schema
 from app.db.session import get_db
 from app.core.security import get_current_active_user, get_current_user
 from app.models.user import User
+from app.schemas.user import RoleEnum
 from app.utils.timestamps import (
     parse_timestamp_filters,
     apply_timestamp_filters,
@@ -101,10 +102,11 @@ def get_all_users(
     Retrieve all users in the system with timestamp filtering and sorting.
     Only accessible to admin users.
     """
-    if current_user.role != "admin":
+    print(current_user.role.value)
+    if current_user.role not in {RoleEnum.admin, RoleEnum.pere, RoleEnum.mere}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can retrieve all users."
+            detail="Only admins,pere or mere can retrieve all users."
         )
     
     # Parse timestamp filters

@@ -394,7 +394,7 @@
                     📎
                 </button>
                 <input type="text" id="messageInput" class="message-input" placeholder="Type a message...">
-                <button id="sendButton" class="send-button" disabled>Send</button>
+                <button id="sendButton" class="send-button">Send</button>
             </div>
         </div>
     </div>
@@ -676,7 +676,9 @@
                 const input = document.getElementById('messageInput');
                 const content = input.value.trim();
 
+                console.log(content)
                 if (!content || !this.currentRoom) return;
+
 
                 // Send via REST API
                 fetch(`/chat/rooms/${this.currentRoom.id}/messages`, {
