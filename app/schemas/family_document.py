@@ -28,7 +28,14 @@ class DocumentOut(BaseModel, TimestampMixin):
     @field_serializer('uploaded_at')
     def serialize_uploaded_at(self, uploaded_at: datetime, _info):
         return uploaded_at.isoformat()
-      # Accept both report and letter status strings
+
+    @field_serializer('created_at')
+    def serialize_created_at(self, created_at: datetime, _info):
+        return created_at.isoformat()
+
+    @field_serializer('updated_at')
+    def serialize_updated_at(self, updated_at: datetime, _info):
+        return updated_at.isoformat()
 
     class Config:
         from_attributes = True

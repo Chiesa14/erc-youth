@@ -23,7 +23,6 @@ def save_document_to_disk(family_id: int, file: UploadFile, type: DocumentType) 
     return file_path, filename
 
 
-
 def upload_family_document(
         db: Session, family_id: int, type: DocumentType, file: UploadFile
 ) -> FamilyDocument:
@@ -49,14 +48,26 @@ def upload_family_document(
     return db_doc
 
 
-def get_document_by_id(db: Session, doc_id: int, family_id: int) -> type[FamilyDocument] | None:
+def get_document_by_id(db: Session, doc_id: int, family_id: int) -> FamilyDocument:
+    """Get document by ID for a specific family (regular user access)"""
     doc = db.query(FamilyDocument).filter_by(id=doc_id, family_id=family_id).first()
     if not doc or not os.path.exists(doc.file_path):
         raise HTTPException(status_code=404, detail="Document not found")
     return doc
 
 
+def get_admin_document_by_id(db: Session, doc_id: int) -> FamilyDocument:
+    """Get document by ID across all families (admin access only)"""
+    doc = db.query(FamilyDocument).filter_by(id=doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="Document file not found on disk")
+    return doc
+
+
 def delete_document(db: Session, doc: FamilyDocument):
+    """Delete document (works for both regular users and admins)"""
     if os.path.exists(doc.file_path):
         os.remove(doc.file_path)
     db.delete(doc)
@@ -64,6 +75,23 @@ def delete_document(db: Session, doc: FamilyDocument):
 
 
 def list_family_documents(db: Session, family_id: int):
+    """List documents for a specific family"""
     return db.query(FamilyDocument).filter_by(family_id=family_id).order_by(FamilyDocument.uploaded_at.desc()).all()
 
 
+def list_all_documents(db: Session, skip: int = 0, limit: int = None):
+    """List all documents across all families (admin only)"""
+    query = db.query(FamilyDocument).order_by(FamilyDocument.uploaded_at.desc())
+    if limit:
+        return query.offset(skip).limit(limit).all()
+    return query.all()
+
+
+def get_document_count_by_family(db: Session, family_id: int) -> int:
+    """Get total document count for a specific family"""
+    return db.query(FamilyDocument).filter_by(family_id=family_id).count()
+
+
+def get_global_document_count(db: Session) -> int:
+    """Get total document count across all families (admin only)"""
+    return db.query(FamilyDocument).count()

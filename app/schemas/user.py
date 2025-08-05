@@ -44,6 +44,7 @@ class UserOut(BaseModel, TimestampMixin):  # Now this works since TimestampMixin
     other: Optional[str]
     biography: Optional[str]
     profile_pic: Optional[str]
+    access_code: Optional[str] = None
 
     class Config:
         from_attributes = True
