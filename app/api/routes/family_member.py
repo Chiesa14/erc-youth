@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -8,15 +9,17 @@ from app.controllers.family_member import verify_temp_password, create_user_from
 from app.db.session import get_db
 from app.core.security import get_current_active_user, get_password_hash
 from app.core.permissions import require_parent
-from app.models import Family
+from app.models import Family, Activity
 from app.models.family_member import FamilyMemberInvitation, FamilyMember
 from app.models.user import User
+from app.schemas.family_activity import ActivityCategoryEnum
 from app.schemas.family_member import (
     FamilyMemberCreate,
     FamilyMemberOut,
     FamilyMemberUpdate,
     GrantAccessRequest,
-    DelegatedAccessOut, MemberActivationResponse, MemberActivationRequest, AccessPermissionEnum,
+    DelegatedAccessOut, MemberActivationResponse, MemberActivationRequest, AccessPermissionEnum, FamilyStats,
+    AgeDistribution, MonthlyTrend
 )
 from app.services.email_service import EmailService
 from app.utils.timestamps import (
@@ -281,3 +284,117 @@ def get_member_permissions(
         permissions=[perm.permission for perm in member.permissions]
     )
 
+
+@router.get("/{family_id}/stats", response_model=FamilyStats, tags=["Stats"])
+def get_family_stats(family_id: int, db: Session = Depends(get_db)):
+
+    if not db.query(Family).filter(Family.id == family_id).first():
+        raise HTTPException(status_code=404, detail="Family not found")
+
+    today = date.today()
+    current_year = today.year
+
+
+    total_members_count = db.query(User).filter(User.family_id == family_id).count()
+
+    first_day_of_current_month = today.replace(day=1)
+    monthly_members_count = db.query(User).filter(
+        User.family_id == family_id,
+        User.created_at >= first_day_of_current_month
+    ).count()
+
+    bcc_graduate_count = db.query(FamilyMember).filter(
+        FamilyMember.family_id == family_id,
+        FamilyMember.year_of_graduation != None,
+        FamilyMember.year_of_graduation < current_year
+    ).count()
+
+    active_events_count = db.query(Activity).filter(
+        Activity.family_id == family_id,
+        Activity.date >= today
+    ).count()
+
+    start_of_week = today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    weekly_events_count = db.query(Activity).filter(
+        Activity.family_id == family_id,
+        Activity.date.between(start_of_week, end_of_week)
+    ).count()
+
+    thirty_days_ago = today - timedelta(days=30)
+    engagement_count = db.query(Activity).filter(
+        Activity.family_id == family_id,
+        Activity.date >= thirty_days_ago
+    ).count()
+
+    # --- New: Age Distribution Calculation ---
+    members_with_dob = db.query(FamilyMember).filter(
+        FamilyMember.family_id == family_id,
+        FamilyMember.date_of_birth != None
+    ).all()
+
+    total_with_dob = len(members_with_dob)
+    age_counts = {"0-12": 0, "13-18": 0, "19-25": 0, "35+": 0}
+
+    if total_with_dob > 0:
+        for member in members_with_dob:
+            age = today.year - member.date_of_birth.year - (
+                        (today.month, today.day) < (member.date_of_birth.month, member.date_of_birth.day))
+            if 0 <= age <= 12:
+                age_counts["0-12"] += 1
+            elif 13 <= age <= 18:
+                age_counts["13-18"] += 1
+            elif 19 <= age <= 25:
+                age_counts["19-25"] += 1
+            elif age >= 35:
+                age_counts["35+"] += 1
+
+    age_distribution_data = AgeDistribution(
+        zero_to_twelve=round((age_counts["0-12"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        thirteen_to_eighteen=round((age_counts["13-18"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        nineteen_to_twenty_five=round((age_counts["19-25"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        thirty_five_plus=round((age_counts["35+"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+    )
+
+    # --- New: Activity Trends Calculation (Last 6 Months) ---
+    trends = {}
+    for i in range(6):
+        # Go back month by month
+        month = today.month - i
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        month_key = date(year, month, 1).strftime("%Y-%m")
+        trends[month_key] = {"spiritual": 0, "social": 0}
+
+    six_months_ago_date = date(today.year, today.month, 1) - timedelta(days=31 * 5)  # Approximate start date
+
+    activities = db.query(Activity).filter(
+        Activity.family_id == family_id,
+        Activity.date >= six_months_ago_date.replace(day=1),
+        Activity.category.in_([ActivityCategoryEnum.spiritual, ActivityCategoryEnum.social])
+    ).all()
+
+    for act in activities:
+        month_key = act.date.strftime("%Y-%m")
+        if month_key in trends:
+            if act.category == ActivityCategoryEnum.spiritual:
+                trends[month_key]["spiritual"] += 1
+            elif act.category == ActivityCategoryEnum.social:
+                trends[month_key]["social"] += 1
+
+    activity_trends_data = {
+        month: MonthlyTrend(**counts) for month, counts in trends.items()
+    }
+
+    return FamilyStats(
+        total_members=total_members_count,
+        monthly_members=monthly_members_count,
+        bcc_graduate=bcc_graduate_count,
+        active_events=active_events_count,
+        weekly_events=weekly_events_count,
+        engagement=engagement_count,
+        age_distribution=age_distribution_data,
+        activity_trends=activity_trends_data,
+    )

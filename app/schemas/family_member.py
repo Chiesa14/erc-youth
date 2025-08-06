@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, field_serializer, computed_field
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import date
 from enum import Enum
 
@@ -84,3 +84,23 @@ class MemberActivationResponse(BaseModel):
     message: str
     user_id: int
     access_code: Optional[str] = None
+
+class AgeDistribution(BaseModel):
+    zero_to_twelve: float
+    thirteen_to_eighteen: float
+    nineteen_to_twenty_five: float
+    thirty_five_plus: float
+
+class MonthlyTrend(BaseModel):
+    spiritual: int
+    social: int
+
+class FamilyStats(BaseModel):
+    total_members:int
+    monthly_members:int
+    bcc_graduate: int
+    active_events:int
+    weekly_events:int
+    engagement:int
+    age_distribution: AgeDistribution
+    activity_trends: Dict[str, MonthlyTrend]
