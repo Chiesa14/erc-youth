@@ -16,5 +16,8 @@ class Family(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     users = relationship("User", back_populates="family")
-    members = relationship("FamilyMember", back_populates="family")  # <-- ADD THIS
+    members = relationship("FamilyMember", back_populates="family")
     prayer_chains = relationship("PrayerChain", back_populates="family")
+    programs = relationship("Program", back_populates="family")
+    comments = relationship("Comment", back_populates="family")
+    feedback = relationship("Feedback", back_populates="family")

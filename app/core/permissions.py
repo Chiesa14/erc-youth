@@ -27,6 +27,6 @@ def get_pastor_user(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != RoleEnum.church_pastor:
         raise HTTPException(
             status_code=403,
-            detail="Access denied. Only church pastors can manage prayer chains."
+            detail="Access denied. Only church pastors can manage this actions."
         )
     return current_user

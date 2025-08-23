@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 import asyncio
 
-from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics
+from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback
 from dotenv import load_dotenv
 
 from app.db.init_db import init_db
@@ -49,6 +49,8 @@ app.include_router(timestamp_analytics.router, prefix="/analytics/timestamps", t
 app.include_router(analytics.router, prefix="/analytics", tags=["Church Analytics"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 app.include_router(websocket.router, prefix="/chat", tags=["WebSocket"])
+app.include_router(recommendation.router, prefix="/recommendations", tags=["Recommendations"])
+app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
