@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 from datetime import date
 from typing import Optional
 from app.utils.timestamps import TimestampMixin
@@ -54,6 +54,10 @@ class ActivityUpdate(BaseModel):
 
 class ActivityOut(ActivityBase, TimestampMixin):
     id: int
+    family_name: str
 
-    class Config:
-        from_attributes = True
+    @classmethod
+    def from_orm(cls, obj):
+        # Ensure family_name is populated from the family relationship
+        obj.family_name = obj.family.name if obj.family else "Unknown"
+        return super().from_orm(obj)

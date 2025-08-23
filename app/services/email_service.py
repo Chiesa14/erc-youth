@@ -35,7 +35,7 @@ class EmailService:
             msg = MIMEMultipart()
             msg['From'] = self.from_email
             msg['To'] = to_email
-            msg['Subject'] = f"Welcome to {family_name} - Set Up Your Account"
+            msg['Subject'] = f"Welcome to {family_name} family - Set Up Your Account"
 
             encoded_temp_password = urllib.parse.quote(temp_password)
             activation_link = f"{frontend_url}?member_id={member_id}&temp_password={encoded_temp_password}"
