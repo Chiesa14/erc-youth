@@ -21,7 +21,7 @@ class Announcement(Base):
 
     user = relationship("User", back_populates="announcements")
     flyer = relationship("SharedDocument", back_populates="announcement")
-    views = relationship("AnnouncementView", back_populates="announcement")
+    views = relationship("AnnouncementView", back_populates="announcement", cascade="all, delete-orphan")
 
     @property
     def view_count(self):
@@ -31,7 +31,7 @@ class AnnouncementView(Base):
     __tablename__ = "announcement_views"
 
     id = Column(Integer, primary_key=True, index=True)
-    announcement_id = Column(Integer, ForeignKey("announcements.id"), nullable=False)
+    announcement_id = Column(Integer, ForeignKey("announcements.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     session_id = Column(String, nullable=True)
     viewed_at = Column(DateTime, server_default=func.now())

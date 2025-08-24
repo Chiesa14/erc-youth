@@ -17,6 +17,7 @@ from app.schemas.chat import (
 from app.services.chat_service import chat_service
 from app.services.file_upload import file_upload_service
 from app.core.websocket_manager import connection_manager
+from app.utils.logging_decorator import log_create, log_update, log_delete, log_view, log_upload
 from datetime import datetime
 import logging
 
@@ -32,6 +33,7 @@ class ChatController:
         self.connection_manager = connection_manager
 
     # Chat Room Management Methods
+    @log_create("chat_rooms", "Created new chat room")
     async def create_chat_room(self, room_data: ChatRoomCreate, current_user: User, db: Session = None) -> ChatRoom:
         """Create a new chat room"""
         try:
@@ -44,6 +46,7 @@ class ChatController:
                 detail="Failed to create chat room"
             )
 
+    @log_view("chat_rooms", "Viewed user chat rooms")
     async def get_user_chat_rooms(self, page: int, size: int, current_user: User, db: Session = None) -> List[ChatRoom]:
         """Get user's chat rooms with pagination"""
         try:
@@ -56,6 +59,7 @@ class ChatController:
                 detail="Failed to get chat rooms"
             )
 
+    @log_view("chat_rooms", "Viewed chat room details")
     async def get_chat_room(self, room_id: int, current_user: User, db: Session) -> ChatRoom:
         """Get a specific chat room"""
         try:
@@ -90,6 +94,7 @@ class ChatController:
                 detail="Failed to get chat room"
             )
 
+    @log_update("chat_rooms", "Updated chat room")
     async def update_chat_room(self, room_id: int, room_data: ChatRoomUpdate, current_user: User,
                                db: Session = None) -> ChatRoom:
         """Update a chat room"""
@@ -113,6 +118,7 @@ class ChatController:
                 detail="Failed to update chat room"
             )
 
+    @log_delete("chat_rooms", "Deleted chat room")
     async def delete_chat_room(self, room_id: int, current_user: User, db: Session) -> Dict[str, str]:
         """Delete a chat room (soft delete)"""
         try:
@@ -156,6 +162,7 @@ class ChatController:
             )
 
     # Message Management Methods
+    @log_create("messages", "Sent chat message")
     async def send_message(self, room_id: int, message_data: MessageCreate, current_user: User,
                            db: Session = None) -> Message:
         """Send a message to a chat room"""
@@ -177,6 +184,7 @@ class ChatController:
                 detail="Failed to send message"
             )
 
+    @log_view("messages", "Viewed chat messages")
     async def get_messages(self, room_id: int, page: int, size: int, current_user: User, db: Session = None) -> List[
         Message]:
         """Get messages from a chat room"""
@@ -195,6 +203,7 @@ class ChatController:
                 detail="Failed to get messages"
             )
 
+    @log_update("messages", "Edited chat message")
     async def edit_message(self, message_id: int, message_data: MessageUpdate, current_user: User,
                            db: Session = None) -> Message:
         """Edit a message"""
@@ -218,6 +227,7 @@ class ChatController:
                 detail="Failed to edit message"
             )
 
+    @log_delete("messages", "Deleted chat message")
     async def delete_message(self, message_id: int, current_user: User, db: Session = None) -> Dict[str, str]:
         """Delete a message"""
         try:
@@ -247,6 +257,7 @@ class ChatController:
             )
 
     # File Upload Methods
+    @log_upload("chat_files", "Uploaded chat image")
     async def upload_image(self, file: UploadFile, current_user: User) -> Dict[str, Any]:
         """Upload an image for messages"""
         try:
@@ -267,6 +278,7 @@ class ChatController:
                 detail="Failed to upload image"
             )
 
+    @log_upload("chat_files", "Uploaded chat file")
     async def upload_file(self, file: UploadFile, current_user: User) -> Dict[str, Any]:
         """Upload a file for messages"""
         try:
@@ -279,6 +291,7 @@ class ChatController:
                 detail="Failed to upload file"
             )
 
+    @log_upload("chat_files", "Uploaded chat audio")
     async def upload_audio(self, file: UploadFile, current_user: User) -> Dict[str, Any]:
         """Upload an audio file for messages"""
         try:
@@ -300,6 +313,7 @@ class ChatController:
             )
 
     # Reaction Methods
+    @log_create("message_reactions", "Added message reaction")
     async def add_reaction(self, message_id: int, reaction_data: MessageReactionCreate, current_user: User,
                            db: Session = None) -> Optional[MessageReaction]:
         """Add or remove a reaction to a message"""
@@ -327,6 +341,7 @@ class ChatController:
             )
 
     # Search Methods
+    @log_view("messages", "Searched chat messages")
     async def search_messages(self, search_query: MessageSearchQuery, current_user: User, db: Session = None) -> List[
         Message]:
         """Search messages"""
@@ -371,6 +386,7 @@ class ChatController:
                 detail="Failed to get user presence"
             )
 
+    @log_update("user_presence", "Updated user presence status")
     async def update_user_presence(self, presence_data: UserPresenceUpdate, current_user: User,
                                    db: Session) -> UserPresence:
         """Update user presence status"""
@@ -401,6 +417,7 @@ class ChatController:
             )
 
     # Room Member Management Methods
+    @log_create("chat_room_members", "Added member to chat room")
     async def add_room_member(self, room_id: int, user_id: int, current_user: User, db: Session) -> Dict[str, str]:
         """Add a member to a chat room"""
         try:
@@ -468,6 +485,7 @@ class ChatController:
                 detail="Failed to add member"
             )
 
+    @log_update("chat_room_members", "Removed member from chat room")
     async def remove_room_member(self, room_id: int, user_id: int, current_user: User, db: Session) -> Dict[str, str]:
         """Remove a member from a chat room"""
         try:
@@ -518,6 +536,7 @@ class ChatController:
             )
 
     # Analytics Methods
+    @log_view("chat_analytics", "Viewed chat room analytics")
     async def get_room_analytics(self, room_id: int, days: int, current_user: User, db: Session) -> List[ChatAnalytics]:
         """Get chat room analytics"""
         try:

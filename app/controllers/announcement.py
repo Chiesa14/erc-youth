@@ -9,6 +9,7 @@ from app.models.announcement import Announcement, AnnouncementView
 from app.models.shared_document import SharedDocument
 from app.models.user import User
 from app.schemas.announcement import AnnouncementCreate, AnnouncementUpdate, AnnouncementOut
+from app.utils.logging_decorator import log_create, log_update, log_delete, log_view, log_upload
 
 # Configuration
 UPLOAD_DIR = "uploads/shared_documents"
@@ -37,6 +38,7 @@ def validate_file(file: UploadFile) -> bool:
     return True
 
 
+@log_upload("shared_documents", "Uploaded announcement flyer")
 async def save_uploaded_file(file: UploadFile, db: Session, current_user: User) -> SharedDocument:
     """Save uploaded file and create SharedDocument record"""
     validate_file(file)
@@ -85,6 +87,7 @@ async def save_uploaded_file(file: UploadFile, db: Session, current_user: User) 
     return shared_doc
 
 
+@log_create("announcements", "Created new announcement")
 async def create_announcement(
         announcement: AnnouncementCreate,
         flyer: Optional[UploadFile],
@@ -126,6 +129,7 @@ import uuid
 
 
 # Assuming you have a way to get the session_id from the request (e.g., via cookies)
+@log_view("announcements", "Viewed all announcements")
 async def get_all_announcements(db: Session, current_user: Optional[User] = None, session_id: Optional[str] = None) -> \
 list[AnnouncementOut]:
     announcements = db.query(Announcement).all()
@@ -163,6 +167,7 @@ list[AnnouncementOut]:
     return [convert_to_announcement_out(ann, db) for ann in announcements]
 
 
+@log_view("announcements", "Viewed announcement details")
 async def get_announcement(announcement_id: int, db: Session) -> AnnouncementOut:
     """Get a specific announcement"""
     announcement = db.query(Announcement).filter(Announcement.id == announcement_id).first()
@@ -172,6 +177,7 @@ async def get_announcement(announcement_id: int, db: Session) -> AnnouncementOut
     return convert_to_announcement_out(announcement, db)
 
 
+@log_update("announcements", "Updated announcement")
 async def update_announcement(
         announcement_id: int,
         announcement: AnnouncementUpdate,
@@ -218,8 +224,9 @@ async def update_announcement(
     return convert_to_announcement_out(db_announcement, db)
 
 
+@log_delete("announcements", "Deleted announcement")
 async def delete_announcement(announcement_id: int, db: Session, current_user: User):
-    """Delete an announcement"""
+    """Delete an announcement and all related data"""
     db_announcement = db.query(Announcement).filter(Announcement.id == announcement_id).first()
     if not db_announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -228,22 +235,39 @@ async def delete_announcement(announcement_id: int, db: Session, current_user: U
     if db_announcement.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this announcement")
 
-    # Delete associated flyer if exists
-    if db_announcement.flyer_id:
-        flyer = db.query(SharedDocument).filter(SharedDocument.id == db_announcement.flyer_id).first()
-        if flyer:
-            # Delete the physical file
-            if os.path.exists(flyer.file_path):
-                os.remove(flyer.file_path)
-            db.delete(flyer)
+    try:
+        # First, delete all associated announcement views
+        # This prevents foreign key constraint violations
+        db.query(AnnouncementView).filter(
+            AnnouncementView.announcement_id == announcement_id
+        ).delete(synchronize_session=False)
 
-    db.delete(db_announcement)
-    db.commit()
+        # Delete associated flyer if exists
+        if db_announcement.flyer_id:
+            flyer = db.query(SharedDocument).filter(SharedDocument.id == db_announcement.flyer_id).first()
+            if flyer:
+                # Delete the physical file
+                if os.path.exists(flyer.file_path):
+                    os.remove(flyer.file_path)
+                db.delete(flyer)
 
-    return {"message": "Announcement deleted successfully"}
+        # Finally, delete the announcement itself
+        db.delete(db_announcement)
+        db.commit()
+
+        return {"message": "Announcement deleted successfully"}
+        
+    except Exception as e:
+        # If anything fails, rollback the transaction
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete announcement: {str(e)}"
+        )
 
 
 # Updated service function
+@log_view("shared_documents", "Downloaded announcement flyer")
 async def download_flyer(announcement_id: int, db: Session, request: Request = None):
     """Download announcement flyer"""
     announcement = db.query(Announcement).filter(Announcement.id == announcement_id).first()

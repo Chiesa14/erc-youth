@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from app.services.logging_service import LoggingService
 import logging
 
+# Enhanced logging decorators for comprehensive system activity tracking
+# These decorators automatically capture user context, request info, and structured data
+
 logger = logging.getLogger(__name__)
 
 
@@ -167,8 +170,16 @@ def extract_user_agent_from_request(request):
 
 
 # Predefined decorators for common actions
+# These provide standardized logging for the most common CRUD operations
 def log_create(table_name: str, description: Optional[str] = None):
-    """Decorator for CREATE operations"""
+    """
+    Decorator for CREATE operations
+    
+    Usage:
+        @log_create("announcements", "Created new announcement")
+        def create_announcement(db, current_user, ...):
+            return created_item
+    """
     return log_activity(
         action="CREATE",
         description=description or f"Created new {table_name}",
@@ -180,7 +191,14 @@ def log_create(table_name: str, description: Optional[str] = None):
 
 
 def log_update(table_name: str, description: Optional[str] = None):
-    """Decorator for UPDATE operations"""
+    """
+    Decorator for UPDATE operations
+    
+    Usage:
+        @log_update("users", "Updated user profile")
+        def update_user(db, current_user, ...):
+            return updated_item
+    """
     return log_activity(
         action="UPDATE",
         description=description or f"Updated {table_name}",
@@ -192,7 +210,14 @@ def log_update(table_name: str, description: Optional[str] = None):
 
 
 def log_delete(table_name: str, description: Optional[str] = None):
-    """Decorator for DELETE operations"""
+    """
+    Decorator for DELETE operations
+    
+    Usage:
+        @log_delete("documents", "Deleted document")
+        def delete_document(db, current_user, doc_id):
+            return success_status
+    """
     return log_activity(
         action="DELETE",
         description=description or f"Deleted {table_name}",
@@ -204,7 +229,14 @@ def log_delete(table_name: str, description: Optional[str] = None):
 
 
 def log_view(table_name: str, description: Optional[str] = None):
-    """Decorator for VIEW operations"""
+    """
+    Decorator for VIEW operations
+    
+    Usage:
+        @log_view("families", "Viewed family details")
+        def get_family_by_id(db, current_user, family_id):
+            return family_data
+    """
     return log_activity(
         action="VIEW",
         description=description or f"Viewed {table_name}",
@@ -226,7 +258,14 @@ def log_login(description: str = "User logged into the system"):
 
 
 def log_upload(table_name: str, description: Optional[str] = None):
-    """Decorator for file upload operations"""
+    """
+    Decorator for file upload operations
+    
+    Usage:
+        @log_upload("documents", "Uploaded family document")
+        def upload_document(db, current_user, file):
+            return uploaded_doc
+    """
     return log_activity(
         action="UPLOAD",
         description=description or f"Uploaded {table_name}",

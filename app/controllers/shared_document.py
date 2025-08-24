@@ -11,6 +11,7 @@ from math import ceil
 from app.models.shared_document import SharedDocument
 from app.models.user import User
 from app.schemas.shared_document import SharedDocumentOut, SharedDocumentList
+from app.utils.logging_decorator import log_upload, log_view, log_update, log_delete
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ def validate_shared_document_file(file: UploadFile) -> bool:
     return True
 
 
+@log_upload("shared_documents", "Uploaded shared document")
 async def upload_shared_document(
         file: UploadFile,
         description: Optional[str],
@@ -103,6 +105,7 @@ async def upload_shared_document(
     return convert_to_shared_document_out(shared_doc)
 
 
+@log_view("shared_documents", "Viewed shared documents list")
 async def get_shared_documents(
         db: Session,
         page: int = 1,
@@ -164,6 +167,7 @@ async def get_shared_documents(
     )
 
 
+@log_view("shared_documents", "Viewed shared document details")
 async def get_shared_document(document_id: int, db: Session, current_user: Optional[User] = None) -> SharedDocumentOut:
     """Get a specific shared document"""
     document = db.query(SharedDocument).filter(SharedDocument.id == document_id).first()
@@ -179,6 +183,7 @@ async def get_shared_document(document_id: int, db: Session, current_user: Optio
     return convert_to_shared_document_out(document)
 
 
+@log_update("shared_documents", "Updated shared document")
 async def update_shared_document(
         document_id: int,
         name: Optional[str],
@@ -211,6 +216,7 @@ async def update_shared_document(
     return convert_to_shared_document_out(document)
 
 
+@log_delete("shared_documents", "Deleted shared document")
 async def delete_shared_document(document_id: int, db: Session, current_user: User):
     """Delete a shared document"""
     document = db.query(SharedDocument).filter(SharedDocument.id == document_id).first()
@@ -241,6 +247,7 @@ async def delete_shared_document(document_id: int, db: Session, current_user: Us
     return {"message": "Document deleted successfully"}
 
 
+@log_view("shared_documents", "Downloaded shared document")
 async def download_shared_document(document_id: int, db: Session, current_user: Optional[User] = None):
     """Download a shared document"""
     document = db.query(SharedDocument).filter(SharedDocument.id == document_id).first()
@@ -270,6 +277,7 @@ async def download_shared_document(document_id: int, db: Session, current_user: 
     )
 
 
+@log_view("shared_documents", "Viewed document statistics")
 async def get_document_stats(db: Session, include_flyers: bool = True) -> dict:
     """Get statistics about shared documents"""
     # Base query

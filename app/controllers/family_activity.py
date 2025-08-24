@@ -2,8 +2,10 @@ from typing import Any, List
 from sqlalchemy.orm import Session, joinedload
 from app.models.family_activity import Activity
 from app.schemas.family_activity import ActivityCreate, ActivityOut
+from app.utils.logging_decorator import log_create, log_view
 
 
+@log_create("family_activities", "Created new family activity")
 def create_activity(db: Session, activity: ActivityCreate):
     db_activity = Activity(**activity.dict())
     db.add(db_activity)
@@ -23,6 +25,7 @@ def create_activity(db: Session, activity: ActivityCreate):
     return ActivityOut(**activity_dict)
 
 
+@log_view("family_activities", "Viewed family activities")
 def get_activities_by_family(db: Session, family_id: int) -> List[ActivityOut]:
     activities = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.family_id == family_id).all()
 
@@ -38,6 +41,7 @@ def get_activities_by_family(db: Session, family_id: int) -> List[ActivityOut]:
     return result
 
 
+@log_view("family_activities", "Viewed activity details")
 def get_activity_by_id(db: Session, activity_id: int) -> ActivityOut | None:
     activity = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.id == activity_id).first()
 

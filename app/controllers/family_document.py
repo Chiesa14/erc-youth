@@ -5,6 +5,7 @@ from app.models.family_document import FamilyDocument
 from app.schemas.family_document import DocumentType, ReportStatus, LetterStatus
 from datetime import datetime
 from fastapi import UploadFile, HTTPException
+from app.utils.logging_decorator import log_upload, log_view, log_delete
 
 UPLOAD_DIR = "uploads/documents"
 
@@ -23,6 +24,7 @@ def save_document_to_disk(family_id: int, file: UploadFile, type: DocumentType) 
     return file_path, filename
 
 
+@log_upload("family_documents", "Uploaded family document")
 def upload_family_document(
         db: Session, family_id: int, type: DocumentType, file: UploadFile
 ) -> FamilyDocument:
@@ -48,6 +50,7 @@ def upload_family_document(
     return db_doc
 
 
+@log_view("family_documents", "Viewed family document")
 def get_document_by_id(db: Session, doc_id: int, family_id: int) -> FamilyDocument:
     """Get document by ID for a specific family (regular user access)"""
     doc = db.query(FamilyDocument).filter_by(id=doc_id, family_id=family_id).first()
@@ -56,6 +59,7 @@ def get_document_by_id(db: Session, doc_id: int, family_id: int) -> FamilyDocume
     return doc
 
 
+@log_view("family_documents", "Admin viewed family document")
 def get_admin_document_by_id(db: Session, doc_id: int) -> FamilyDocument:
     """Get document by ID across all families (admin access only)"""
     doc = db.query(FamilyDocument).filter_by(id=doc_id).first()
@@ -66,6 +70,7 @@ def get_admin_document_by_id(db: Session, doc_id: int) -> FamilyDocument:
     return doc
 
 
+@log_delete("family_documents", "Deleted family document")
 def delete_document(db: Session, doc: FamilyDocument):
     """Delete document (works for both regular users and admins)"""
     if os.path.exists(doc.file_path):
@@ -74,11 +79,13 @@ def delete_document(db: Session, doc: FamilyDocument):
     db.commit()
 
 
+@log_view("family_documents", "Listed family documents")
 def list_family_documents(db: Session, family_id: int):
     """List documents for a specific family"""
     return db.query(FamilyDocument).filter_by(family_id=family_id).order_by(FamilyDocument.uploaded_at.desc()).all()
 
 
+@log_view("family_documents", "Admin listed all documents")
 def list_all_documents(db: Session, skip: int = 0, limit: int = None):
     """List all documents across all families (admin only)"""
     query = db.query(FamilyDocument).order_by(FamilyDocument.uploaded_at.desc())

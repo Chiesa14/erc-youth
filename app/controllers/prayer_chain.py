@@ -14,6 +14,7 @@ from app.schemas.prayer_chain import (
 )
 from app.schemas.user import RoleEnum
 from app.utils.schedule_utils import check_db_schedule_collisions, validate_schedule_batch, normalize_time
+from app.utils.logging_decorator import log_create, log_update, log_delete, log_view
 
 
 def get_family_details(db: Session, family: Family) -> dict:
@@ -53,6 +54,7 @@ def get_family_details(db: Session, family: Family) -> dict:
     return family_details
 
 
+@log_view("prayer_chains", "Viewed all prayer chains")
 def get_all_prayer_chains(db: Session) -> List[PrayerChainResponse]:
     """Get all prayer chains with their schedules and detailed family information"""
     prayer_chains = db.query(PrayerChain).all()
@@ -89,6 +91,7 @@ def get_all_prayer_chains(db: Session) -> List[PrayerChainResponse]:
     return result
 
 
+@log_view("prayer_chains", "Viewed prayer chain details")
 def get_prayer_chain_by_id(db: Session, prayer_chain_id: int) -> PrayerChainResponse:
     """Get a specific prayer chain by ID with detailed family information"""
     prayer_chain = db.query(PrayerChain).filter(PrayerChain.id == prayer_chain_id).first()
@@ -122,6 +125,7 @@ def get_prayer_chain_by_id(db: Session, prayer_chain_id: int) -> PrayerChainResp
     )
 
 
+@log_create("prayer_chains", "Created or updated prayer chain")
 def create_or_update_prayer_chain(db: Session, prayer_chain: PrayerChainCreate,
                                   allow_update: bool = True) -> PrayerChainResponse:
     """
@@ -202,6 +206,7 @@ def create_or_update_prayer_chain(db: Session, prayer_chain: PrayerChainCreate,
         return get_prayer_chain_by_id(db, db_prayer_chain.id)
 
 
+@log_update("prayer_chains", "Updated prayer chain")
 def update_prayer_chain(db: Session, prayer_chain_id: int, prayer_chain: PrayerChainUpdate) -> PrayerChainResponse:
     """Update an existing prayer chain"""
     db_prayer_chain = db.query(PrayerChain).filter(PrayerChain.id == prayer_chain_id).first()
@@ -236,6 +241,7 @@ def update_prayer_chain(db: Session, prayer_chain_id: int, prayer_chain: PrayerC
     return get_prayer_chain_by_id(db, db_prayer_chain.id)
 
 
+@log_delete("prayer_chains", "Deleted prayer chain")
 def delete_prayer_chain(db: Session, prayer_chain_id: int):
     """Delete a prayer chain and all its schedules"""
     db_prayer_chain = db.query(PrayerChain).filter(PrayerChain.id == prayer_chain_id).first()
@@ -247,6 +253,7 @@ def delete_prayer_chain(db: Session, prayer_chain_id: int):
     return {"message": "Prayer chain deleted successfully"}
 
 
+@log_create("prayer_schedules", "Added schedule to prayer chain")
 def add_schedule_to_prayer_chain(db: Session, prayer_chain_id: int, schedule: ScheduleCreate) -> ScheduleResponse:
     """Add a new schedule to an existing prayer chain with collision detection"""
     prayer_chain = db.query(PrayerChain).filter(PrayerChain.id == prayer_chain_id).first()
@@ -287,6 +294,7 @@ def add_schedule_to_prayer_chain(db: Session, prayer_chain_id: int, schedule: Sc
     )
 
 
+@log_update("prayer_schedules", "Updated prayer schedule")
 def update_schedule(db: Session, schedule_id: int, schedule: ScheduleUpdate) -> ScheduleResponse:
     """Update an existing schedule with collision detection"""
     db_schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
@@ -343,6 +351,7 @@ def update_schedule(db: Session, schedule_id: int, schedule: ScheduleUpdate) -> 
     )
 
 
+@log_delete("prayer_schedules", "Deleted prayer schedule")
 def delete_schedule(db: Session, schedule_id: int):
     """Delete a specific schedule"""
     db_schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()

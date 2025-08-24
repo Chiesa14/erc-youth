@@ -12,8 +12,10 @@ from app.schemas.recommendation import (
     PriorityEnum, CommentTypeEnum, ProgramStatusEnum
 )
 from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
+from app.utils.logging_decorator import log_create, log_update, log_view
 
 
+@log_view("programs", "Viewed pending programs")
 def get_pending_programs(db: Session) -> List[ProgramResponse]:
     """
     Get all pending programs for approval
@@ -40,6 +42,7 @@ def get_pending_programs(db: Session) -> List[ProgramResponse]:
     return result
 
 
+@log_view("recommendations", "Viewed all recommendations")
 def get_all_recommendations(
         db: Session,
         family_ids: Optional[List[int]] = None,
@@ -110,6 +113,7 @@ def get_all_recommendations(
     return recommendations
 
 
+@log_view("recommendations", "Viewed recommendations summary")
 def get_recommendations_summary(
         db: Session,
         family_ids: Optional[List[int]] = None,
@@ -175,6 +179,7 @@ def get_recommendations_summary(
     }
 
 
+@log_view("comments", "Viewed family comments")
 def get_family_comments(db: Session, family_id: int) -> List[CommentResponse]:
     """
     Get all comments for a specific family
@@ -198,6 +203,7 @@ def get_family_comments(db: Session, family_id: int) -> List[CommentResponse]:
     return result
 
 
+@log_create("programs", "Created new program proposal")
 def create_program(db: Session, program: ProgramCreate) -> ProgramResponse:
     """
     Create a new program proposal
@@ -235,6 +241,7 @@ def create_program(db: Session, program: ProgramCreate) -> ProgramResponse:
     )
 
 
+@log_update("programs", "Updated program status")
 def update_program_status(db: Session, program_id: int, program_update: ProgramUpdate) -> ProgramResponse:
     """
     Update the status of a program (approve/reject)
@@ -264,6 +271,7 @@ def update_program_status(db: Session, program_id: int, program_update: ProgramU
     )
 
 
+@log_create("comments", "Created new comment/recommendation")
 def create_comment(db: Session, comment: CommentCreate) -> CommentResponse:
     """
     Create a new comment/recommendation

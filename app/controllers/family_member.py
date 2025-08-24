@@ -16,10 +16,12 @@ from app.schemas.family_member import FamilyMemberCreate
 from app.schemas.user import RoleEnum, UserCreate
 from app.services.email_service import EmailService
 from app.controllers.user import create_user, update_user_password
+from app.utils.logging_decorator import log_create, log_update, log_delete, log_view
 
 logger = logging.getLogger(__name__)
 
 
+@log_create("family_members", "Created new family member")
 def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMember:
     existing_name = db.query(FamilyMember).filter(
         FamilyMember.name == member.name,
@@ -81,14 +83,17 @@ def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMembe
 
 
 
+@log_view("family_members", "Viewed family members")
 def get_family_members_by_family_id(db: Session, family_id: int) -> list[type[FamilyMember]]:
     return db.query(FamilyMember).filter(FamilyMember.family_id == family_id).all()
 
 
+@log_view("family_members", "Viewed family member details")
 def get_family_member_by_id(db: Session, member_id: int) -> FamilyMember | None:
     return db.query(FamilyMember).filter(FamilyMember.id == member_id).first()
 
 
+@log_update("family_members", "Updated family member")
 def update_family_member(
     db: Session, member_id: int, updates: FamilyMemberUpdate
 ) -> FamilyMember | None:
@@ -135,6 +140,7 @@ def update_family_member(
     db.refresh(db_member)
     return db_member
 
+@log_delete("family_members", "Deleted family member")
 def delete_family_member(db: Session, member_id: int) -> bool:
     db_member = get_family_member_by_id(db, member_id)
     if not db_member:
@@ -146,6 +152,7 @@ def delete_family_member(db: Session, member_id: int) -> bool:
 
 
 
+@log_create("family_member_permissions", "Granted permissions to family member")
 def grant_permissions_to_member(
     db: Session,
     family_id: int,
@@ -177,6 +184,7 @@ def grant_permissions_to_member(
     db.commit()
 
 
+@log_view("family_member_permissions", "Viewed members with permissions")
 def get_members_with_permissions(db: Session, family_id: int) -> list[DelegatedAccessOut]:
     members = db.query(FamilyMember).options(joinedload(FamilyMember.permissions)) \
         .filter(FamilyMember.family_id == family_id).all()
@@ -193,6 +201,7 @@ def get_members_with_permissions(db: Session, family_id: int) -> list[DelegatedA
     return result
 
 
+@log_update("family_member_permissions", "Updated member permissions")
 def update_member_permissions(
     db: Session,
     family_id: int,
@@ -202,6 +211,7 @@ def update_member_permissions(
     return grant_permissions_to_member(db, family_id, request, current_user)
 
 
+@log_delete("family_member_permissions", "Revoked member permissions")
 def revoke_member_permissions(
     db: Session,
     family_id: int,
@@ -222,6 +232,7 @@ def revoke_member_permissions(
     db.commit()
 
 
+@log_create("users", "Created user account from family member")
 def create_user_from_member(db: Session, member_id: int, new_password: str) -> User:
     """Create a user account from an existing family member"""
 
@@ -275,6 +286,7 @@ def create_user_from_member(db: Session, member_id: int, new_password: str) -> U
     return db_user
 
 
+@log_view("family_member_invitations", "Verified temporary password")
 def verify_temp_password(db: Session, member_id: int, temp_password: str) -> bool:
     """Verify temporary password for a family member"""
     invitation = db.query(FamilyMemberInvitation).filter(

@@ -7,7 +7,9 @@ from app.models.feedback import Feedback, Reply
 from app.models.family import Family
 from app.schemas.feedback import FeedbackCreate, FeedbackUpdate, FeedbackResponse, ReplyCreate, ReplyResponse
 from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
+from app.utils.logging_decorator import log_create, log_update, log_view
 
+@log_view("feedback", "Viewed feedback list")
 def get_feedback_list(db: Session, status_filter: str = None) -> List[FeedbackResponse]:
     """
     Get all feedback, optionally filtered by status
@@ -52,6 +54,7 @@ def get_feedback_list(db: Session, status_filter: str = None) -> List[FeedbackRe
     
     return result
 
+@log_view("feedback", "Viewed feedback details")
 def get_feedback_by_id(db: Session, feedback_id: int) -> FeedbackResponse:
     """
     Get a specific feedback item by ID
@@ -88,6 +91,7 @@ def get_feedback_by_id(db: Session, feedback_id: int) -> FeedbackResponse:
         replies=replies
     )
 
+@log_create("feedback", "Created new feedback")
 def create_feedback(db: Session, feedback: FeedbackCreate) -> FeedbackResponse:
     """
     Create a new feedback item
@@ -126,6 +130,7 @@ def create_feedback(db: Session, feedback: FeedbackCreate) -> FeedbackResponse:
         replies=[]
     )
 
+@log_update("feedback", "Updated feedback status")
 def update_feedback(db: Session, feedback_id: int, feedback_update: FeedbackUpdate) -> FeedbackResponse:
     """
     Update a feedback item
@@ -172,6 +177,7 @@ def update_feedback(db: Session, feedback_id: int, feedback_update: FeedbackUpda
     )
 
 
+@log_create("feedback_replies", "Created feedback reply")
 def create_reply(db: Session, feedback_id: int, reply: ReplyCreate, author: str = None) -> ReplyResponse:
     """
     Create a reply to a feedback item
@@ -199,6 +205,7 @@ def create_reply(db: Session, feedback_id: int, reply: ReplyCreate, author: str 
         date=db_reply.date
     )
 
+@log_view("feedback", "Viewed new feedback count")
 def get_new_feedback_count(db: Session) -> int:
     """
     Get count of new feedback items
