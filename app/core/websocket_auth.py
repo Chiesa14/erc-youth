@@ -37,7 +37,7 @@ def get_user_from_token(token: str) -> Optional[User]:
         return None
     
     user_email = payload.get("sub")
-    print(user_email)
+    logger.debug(f"User email from token: {user_email}")
     if not user_email:
         return None
     

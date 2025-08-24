@@ -3,5 +3,6 @@
 .venv/
 
 uploads/
+logs/
 
 __pycache__/

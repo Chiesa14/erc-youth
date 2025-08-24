@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import logging
 import app.controllers.user as crud_user
 import app.schemas.user as user_schema
 from app.db.session import get_db
@@ -13,6 +14,8 @@ from app.utils.timestamps import (
     apply_timestamp_sorting,
     TimestampQueryParams
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Users"])
 
@@ -102,7 +105,7 @@ def get_all_users(
     Retrieve all users in the system with timestamp filtering and sorting.
     Only accessible to admin users.
     """
-    print(current_user.role.value)
+    logger.debug(f"User role: {current_user.role.value}")
     if current_user.role not in {RoleEnum.admin, RoleEnum.pere, RoleEnum.mere}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

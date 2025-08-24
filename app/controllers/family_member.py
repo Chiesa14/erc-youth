@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -15,6 +16,8 @@ from app.schemas.family_member import FamilyMemberCreate
 from app.schemas.user import RoleEnum, UserCreate
 from app.services.email_service import EmailService
 from app.controllers.user import create_user, update_user_password
+
+logger = logging.getLogger(__name__)
 
 
 def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMember:
@@ -72,7 +75,7 @@ def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMembe
 
         if not email_sent:
             # Optionally, you might want to handle email failure
-            print(f"Failed to send invitation email to {member.email}")
+            logger.warning(f"Failed to send invitation email to {member.email}")
 
     return db_member
 

@@ -4,7 +4,9 @@ from app.schemas.user import RoleEnum, GenderEnum, FamilyCategoryEnum
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal, Base, engine
 from app.core.timestamp_middleware import init_timestamp_middleware
+import logging
 
+logger = logging.getLogger(__name__)
 
 def init_db():
     # Initialize timestamp middleware
@@ -28,9 +30,9 @@ def init_db():
             role=RoleEnum.admin,
         )
         db.add(admin_user)
-        print("Default admin user created.")
+        logger.info("Default admin user created.")
     else:
-        print("Admin user already exists.")
+        logger.info("Admin user already exists.")
 
     # Check if church pastor user already exists
     pastor_email = "pastor@church.com"
@@ -46,9 +48,9 @@ def init_db():
             biography="Church pastor responsible for spiritual guidance and church activities."
         )
         db.add(pastor_user)
-        print("Default church pastor user created.")
+        logger.info("Default church pastor user created.")
     else:
-        print("Church pastor user already exists.")
+        logger.info("Church pastor user already exists.")
 
     db.commit()
     db.close()

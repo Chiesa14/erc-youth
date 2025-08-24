@@ -2,14 +2,19 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 import asyncio
+import os
 
 from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback
 from dotenv import load_dotenv
 
 from app.db.init_db import init_db
 from app.core.websocket_manager import start_cleanup_task
+from app.core.logging_config import setup_logging
 
 load_dotenv()
+
+# Setup logging configuration
+setup_logging()
 
 app = FastAPI()
 
@@ -54,5 +59,9 @@ app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# Create static folder if it doesn't exist
+os.makedirs("static", exist_ok=True)
+
 # Mount static files for frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")

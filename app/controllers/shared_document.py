@@ -1,6 +1,7 @@
 import os
 import uuid
 import mimetypes
+import logging
 from typing import Optional, List
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from math import ceil
 from app.models.shared_document import SharedDocument
 from app.models.user import User
 from app.schemas.shared_document import SharedDocumentOut, SharedDocumentList
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 SHARED_DOCS_DIR = "uploads/shared_documents"
@@ -230,7 +233,7 @@ async def delete_shared_document(document_id: int, db: Session, current_user: Us
             os.remove(document.file_path)
     except Exception as e:
         # Log the error but don't fail the deletion
-        print(f"Warning: Could not delete file {document.file_path}: {str(e)}")
+        logger.warning(f"Could not delete file {document.file_path}: {str(e)}")
 
     db.delete(document)
     db.commit()

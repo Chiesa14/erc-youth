@@ -1,11 +1,14 @@
 import smtplib
 import urllib
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 import secrets
 import string
 from app.core.config import settings  # Assuming you have email config here
+
+logger = logging.getLogger(__name__)
 
 
 class EmailService:
@@ -69,5 +72,5 @@ class EmailService:
 
             return True
         except Exception as e:
-            print(f"Error sending email: {str(e)}")
+            logger.error(f"Error sending email: {str(e)}")
             return False
