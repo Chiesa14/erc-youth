@@ -6,6 +6,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, RoleEnum, UserUpdate, AdminUserUpdate
 from app.core.security import get_password_hash
 from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
+from app.utils.logging_decorator import log_create, log_update, log_delete
 import random
 
 
@@ -30,6 +31,7 @@ def get_or_create_family(db: Session, category: str, name: str) -> Family:
     return family
 
 
+@log_create("user", "Created new user account")
 def create_user(db: Session, user: UserCreate):
     access_code = None
 
@@ -64,6 +66,8 @@ def create_user(db: Session, user: UserCreate):
     db.refresh(db_user)
     return db_user
 
+
+@log_update("user", "Updated user profile")
 def update_user_profile(db: Session, user: User, updates: UserUpdate) -> type[User]:
     # Get the user from the current session using the user's ID
     db_user = db.query(User).filter(User.id == user.id).first()
@@ -84,6 +88,8 @@ def update_user_profile(db: Session, user: User, updates: UserUpdate) -> type[Us
     db.refresh(db_user)
     return db_user
 
+
+@log_update("user", "Reset user access code")
 def reset_user_access_code(db: Session, user: User) -> tuple[User, str]:
     new_code = generate_unique_access_code(db)
     user.access_code = new_code
@@ -93,6 +99,8 @@ def reset_user_access_code(db: Session, user: User) -> tuple[User, str]:
     db.refresh(user)
     return user, new_code
 
+
+@log_update("user", "Changed user password")
 def update_user_password(db: Session, user: User, new_password: str) -> User:
     user.hashed_password = get_password_hash(new_password)
     # updated_at will be automatically set by the middleware
@@ -114,6 +122,7 @@ def get_all_users(db: Session) -> list[type[User]]:
     return db.query(User).all()
 
 
+@log_delete("user", "Deleted user account")
 def delete_user(db: Session, user_id: int) -> None:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -122,6 +131,7 @@ def delete_user(db: Session, user_id: int) -> None:
     db.commit()
 
 
+@log_update("user", "Admin updated user information")
 def admin_update_user(db: Session, user_id: int, updates: AdminUserUpdate) -> type[User]:
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:

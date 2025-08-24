@@ -11,8 +11,10 @@ from app.schemas.family import FamilyResponse, FamilyCreate, FamilyUpdate, Famil
     ActivityResponse
 from app.schemas.user import RoleEnum, GenderEnum
 from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
+from app.utils.logging_decorator import log_create, log_update, log_delete, log_view
 
 
+@log_view("families", "Viewed all families")
 def get_all_families(db: Session) -> List[FamilyResponse]:
     last_activity_subquery = (
         db.query(Activity.family_id, func.max(Activity.date).label("last_activity_date"))
@@ -88,6 +90,7 @@ def get_all_families(db: Session) -> List[FamilyResponse]:
     return result
 
 
+@log_view("families", "Viewed family details")
 def get_family_by_id(db: Session, family_id: int) -> FamilyResponse:
     last_activity_subquery = (
         db.query(Activity.family_id, func.max(Activity.date).label("last_activity_date"))
@@ -162,6 +165,7 @@ def get_family_by_id(db: Session, family_id: int) -> FamilyResponse:
     )
 
 
+@log_create("families", "Created family")
 def create_family(db: Session, family: FamilyCreate) -> FamilyResponse:
     # Check if a family with the same category and name already exists
     existing_family = db.query(Family).filter(
@@ -181,6 +185,7 @@ def create_family(db: Session, family: FamilyCreate) -> FamilyResponse:
     db.refresh(db_family)
     return get_family_by_id(db, db_family.id)
 
+@log_update("families", "Updated family")
 def update_family(db: Session, family_id: int, family: FamilyUpdate) -> FamilyResponse:
     db_family = db.query(Family).filter(Family.id == family_id).first()
     if not db_family:
@@ -195,6 +200,7 @@ def update_family(db: Session, family_id: int, family: FamilyUpdate) -> FamilyRe
     db.refresh(db_family)
     return get_family_by_id(db, db_family.id)
 
+@log_delete("families", "Deleted family")
 def delete_family(db: Session, family_id: int):
     db_family = db.query(Family).filter(Family.id == family_id).first()
     if not db_family:

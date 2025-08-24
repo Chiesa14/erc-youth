@@ -5,6 +5,8 @@ import asyncio
 import os
 
 from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback
+from app.api.endpoints import system_logs
+from app.core.logging_middleware import LoggingMiddleware
 from dotenv import load_dotenv
 
 from app.db.init_db import init_db
@@ -38,9 +40,13 @@ app.add_middleware(
     expose_headers=["Content-Disposition"]
 )
 
+# Add logging middleware
+app.add_middleware(LoggingMiddleware)
+
 @app.get("/")
 async def root():
     return {"message": "Welcome to the API"}
+
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(family.router, prefix="/families", tags=["Families"])
@@ -56,6 +62,7 @@ app.include_router(chat.router, prefix="/chat", tags=["Chat"])
 app.include_router(websocket.router, prefix="/chat", tags=["WebSocket"])
 app.include_router(recommendation.router, prefix="/recommendations", tags=["Recommendations"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
+app.include_router(system_logs.router, prefix="/api/system-logs", tags=["System Logs"])
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
