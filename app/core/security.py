@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal, get_db
 from app.models.user import User
+from app.schemas.user import RoleEnum
 
 # Password hashing setup
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -67,8 +68,17 @@ def get_current_admin_user(current_user: User = Depends(get_current_active_user)
     Modify this according to your user role system.
     """
     # Option 1: If you have a role field in User model
-    if not hasattr(current_user, 'role') or current_user.role != 'admin':
+    if not hasattr(current_user, 'role') or current_user.role != RoleEnum.admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
         )
+
+def get_current_admin_or_pastor_user(current_user:User=Depends(get_current_active_user)):
+    
+    if not hasattr(current_user, "role") or current_user.role not in [RoleEnum.admin, RoleEnum.church_pastor]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin or Pastor access required"
+            )
+    

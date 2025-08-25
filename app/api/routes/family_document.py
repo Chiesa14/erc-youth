@@ -9,7 +9,7 @@ from app.models import Family
 from app.models.family_document import FamilyDocument
 from app.schemas.family_document import DocumentType, DocumentOut, ReportStatus, LetterStatus
 from app.controllers import family_document as doc_controller
-from app.core.security import get_db, get_current_active_user, get_current_admin_user
+from app.core.security import get_db, get_current_active_user, get_current_admin_user, get_current_admin_or_pastor_user
 from app.models.user import User
 
 router = APIRouter(tags=["Documents"])
@@ -149,7 +149,7 @@ def document_statistics(
 @router.get("/admin/all")
 async def admin_list_all_documents(
         db: Session = Depends(get_db),
-        current_admin: User = Depends(get_current_admin_user),
+        current_admin: User = Depends(get_current_admin_or_pastor_user),
         skip: int = 0,
         limit: Optional[int] = None,
         family_id: Optional[int] = None,
@@ -217,7 +217,7 @@ async def admin_list_all_documents(
 def admin_download_document(
         doc_id: int,
         db: Session = Depends(get_db),
-        current_admin: User = Depends(get_current_admin_user)
+        current_admin: User = Depends(get_current_admin_or_pastor_user)
 ):
     """
     Admin endpoint to download any document by ID (across all families)
@@ -245,7 +245,7 @@ def admin_update_document_status(
         doc_id: int,
         status: str = Body(...),
         db: Session = Depends(get_db),
-        current_admin: User = Depends(get_current_admin_user)
+        current_admin: User = Depends(get_current_admin_or_pastor_user)
 ):
     """
     Admin endpoint to update document status (only admins can update status)
@@ -268,7 +268,7 @@ def admin_update_document_status(
 def admin_get_document(
         doc_id: int,
         db: Session = Depends(get_db),
-        current_admin: User = Depends(get_current_admin_user),
+        current_admin: User = Depends(get_current_admin_or_pastor_user),
 ):
     """
     Admin endpoint to get any document by ID (across all families)
@@ -280,7 +280,7 @@ def admin_get_document(
 @router.get("/admin/stats/global")
 def admin_global_statistics(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_admin_or_pastor_user),
 ):
     """
     Admin endpoint to get global document statistics across all families
