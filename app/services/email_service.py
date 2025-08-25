@@ -31,10 +31,14 @@ class EmailService:
             temp_password: str,
             family_name: str,
             member_id: int,
-            frontend_url: str = "http://localhost:8080/change-password"
+            frontend_url: str = None
     ) -> bool:
         """Send invitation email to new family member with activation link"""
         try:
+            # Use centralized configuration if no custom frontend_url is provided
+            if frontend_url is None:
+                frontend_url = settings.frontend_change_password_url
+            
             msg = MIMEMultipart()
             msg['From'] = self.from_email
             msg['To'] = to_email

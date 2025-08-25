@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from app.core.websocket_manager import connection_manager
 from app.core.websocket_auth import authenticate_websocket, WebSocketPermissionChecker
 from app.models.user import User
+from app.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -156,6 +157,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int):
 @router.get("/ws/test")
 async def websocket_test_page():
     """Test page for WebSocket connections"""
+    # Inject the WebSocket URL from settings
+    websocket_url = settings.websocket_chat_url
     html_content = """
     <!DOCTYPE html>
     <html>
@@ -238,7 +241,7 @@ async def websocket_test_page():
                     return;
                 }
                 
-                const wsUrl = `ws://localhost:8000/chat/ws?token=${encodeURIComponent(token)}`;
+                const wsUrl = `WS_URL_PLACEHOLDER?token=${encodeURIComponent(token)}`;
                 ws = new WebSocket(wsUrl);
                 
                 ws.onopen = function(event) {
@@ -297,7 +300,7 @@ async def websocket_test_page():
                 
                 ws.send(JSON.stringify({
                     type: 'message',
-                    data: { 
+                    data: {
                         content: message,
                         room_id: currentRoomId
                     }
@@ -312,7 +315,7 @@ async def websocket_test_page():
                 
                 ws.send(JSON.stringify({
                     type: 'typing',
-                    data: { 
+                    data: {
                         room_id: currentRoomId,
                         is_typing: true
                     }
@@ -325,7 +328,7 @@ async def websocket_test_page():
                 
                 ws.send(JSON.stringify({
                     type: 'typing',
-                    data: { 
+                    data: {
                         room_id: currentRoomId,
                         is_typing: false
                     }
@@ -353,6 +356,10 @@ async def websocket_test_page():
     </body>
     </html>
     """
+    
+    # Replace the placeholder with the actual WebSocket URL
+    html_content = html_content.replace("WS_URL_PLACEHOLDER", websocket_url)
+    
     return HTMLResponse(content=html_content)
 
 

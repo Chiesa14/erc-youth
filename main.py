@@ -4,7 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 import asyncio
 import os
 
-from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback
+from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback, config
 from app.api.endpoints import system_logs
 from app.core.logging_middleware import LoggingMiddleware
 from dotenv import load_dotenv
@@ -26,14 +26,11 @@ async def startup_event():
     # Start WebSocket cleanup task
     asyncio.create_task(start_cleanup_task())
 
-origins = [
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-]
+from app.core.config import settings
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,6 +60,7 @@ app.include_router(websocket.router, prefix="/chat", tags=["WebSocket"])
 app.include_router(recommendation.router, prefix="/recommendations", tags=["Recommendations"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 app.include_router(system_logs.router, prefix="/api/system-logs", tags=["System Logs"])
+app.include_router(config.router, prefix="/api/config", tags=["Configuration"])
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
