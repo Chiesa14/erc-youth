@@ -4,7 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 import asyncio
 import os
 
-from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback, config
+from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback, config, dashboard
 from app.api.endpoints import system_logs
 from app.core.logging_middleware import LoggingMiddleware
 from dotenv import load_dotenv
@@ -61,6 +61,7 @@ app.include_router(recommendation.router, prefix="/recommendations", tags=["Reco
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 app.include_router(system_logs.router, prefix="/api/system-logs", tags=["System Logs"])
 app.include_router(config.router, prefix="/api/config", tags=["Configuration"])
+app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 
 # Mount static files for uploads
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
