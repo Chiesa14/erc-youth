@@ -1,8 +1,9 @@
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 
 
+# Church Dashboard Schemas (existing)
 class OverallStats(BaseModel):
     total_youth: int
     total_families: int
@@ -36,7 +37,7 @@ class MonthlyProgress(BaseModel):
 class AgeDistributionData(BaseModel):
     age_group: str
     percentage: float
-
+ 
 
 class ChurchDashboardData(BaseModel):
     overall_stats: OverallStats
@@ -47,6 +48,98 @@ class ChurchDashboardData(BaseModel):
     last_updated: datetime
 
 
+# Admin Dashboard Schemas
+class AdminStats(BaseModel):
+    total_users: int
+    new_users_this_month: int
+    new_users_last_month: int
+    reports_submitted: int
+    active_families: int
+    total_users_change: str
+    new_users_change: str
+
+
+class RecentActivity(BaseModel):
+    user: str
+    action: str
+    time: str
+    type: str
+    user_id: Optional[int] = None
+    family_id: Optional[int] = None
+    family_name: Optional[str] = None
+    table_name: Optional[str] = None
+    record_id: Optional[int] = None
+    details: Optional[str] = None
+
+
+class AdminDashboardData(BaseModel):
+    stats: AdminStats
+    recent_activities: List[RecentActivity]
+    last_updated: datetime
+
+
+# Parent Dashboard Schemas
+class FamilyAgeDistribution(BaseModel):
+    zero_to_twelve: int
+    thirteen_to_eighteen: int
+    nineteen_to_twenty_five: int
+    thirty_five_plus: int
+
+
+class MonthlyTrend(BaseModel):
+    spiritual: int
+    social: int
+
+
+class FamilyStats(BaseModel):
+    total_members: int
+    monthly_members: int
+    bcc_graduate: int
+    active_events: int
+    weekly_events: int
+    engagement: int
+    age_distribution: FamilyAgeDistribution
+    activity_trends: Dict[str, MonthlyTrend]
+
+
+class ParentDashboardData(BaseModel):
+    family_stats: FamilyStats
+    last_updated: datetime
+
+
+# Youth Dashboard Schemas
+class QuickAction(BaseModel):
+    title: str
+    count: int
+    href: str
+    color: str
+    emoji: str
+
+
+class CommunityStat(BaseModel):
+    title: str
+    value: str
+    emoji: str
+    description: str
+
+
+class YouthUpdate(BaseModel):
+    id: int
+    title: str
+    time: str
+    type: str
+    urgent: bool
+    emoji: str
+
+
+class YouthDashboardData(BaseModel):
+    quick_actions: List[QuickAction]
+    community_stats: List[CommunityStat]
+    recent_updates: List[YouthUpdate]
+    last_updated: datetime
+
+
+# Common Filters
 class DashboardFilters(BaseModel):
     department_filter: str = "all"  # "all", "active", "pending"
     date_range: str = "6months"  # "1month", "3months", "6months", "1year"

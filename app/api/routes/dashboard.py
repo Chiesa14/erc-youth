@@ -6,7 +6,10 @@ import logging
 from datetime import datetime
 
 from app.controllers.dashboard import DashboardController
-from app.schemas.dashboard import ChurchDashboardData, DashboardFilters
+from app.schemas.dashboard import (
+    ChurchDashboardData, DashboardFilters, AdminDashboardData,
+    ParentDashboardData, YouthDashboardData
+)
 from app.db.session import get_db
 from app.core.security import get_current_active_user
 from app.models.user import User
@@ -103,4 +106,184 @@ def get_church_stats_summary(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve statistics summary: {str(e)}"
+        )
+
+
+@router.get("/admin-overview", response_model=AdminDashboardData)
+def get_admin_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get admin dashboard with user statistics and recent activities.
+    
+    Includes:
+    - User statistics (total, new this month, changes)
+    - Recent user activities
+    - System overview metrics
+    
+    Only accessible to administrators.
+    """
+    logger.info(f"Admin dashboard access requested by user {current_user.id} with role {current_user.role}")
+    
+    # Restrict access to admins only
+    if current_user.role != RoleEnum.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Only administrators can view this dashboard."
+        )
+    
+    try:
+        dashboard_controller = DashboardController(db)
+        dashboard_data = dashboard_controller.get_admin_dashboard_data()
+        
+        logger.info(f"Admin dashboard data successfully retrieved for user {current_user.id}")
+        return dashboard_data
+        
+    except Exception as e:
+        logger.error(f"Error retrieving admin dashboard data: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve admin dashboard data: {str(e)}"
+        )
+
+
+@router.get("/parent-overview", response_model=ParentDashboardData)
+def get_parent_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get parent/family dashboard with family-specific statistics.
+    
+    Includes:
+    - Family member statistics
+    - Age distribution within family
+    - Activity trends and engagement
+    - BCC completion status
+    
+    Accessible to family parents (pere, mere).
+    """
+    logger.info(f"Parent dashboard access requested by user {current_user.id} with role {current_user.role}")
+    
+    # Restrict access to family parents
+    if current_user.role not in {RoleEnum.pere, RoleEnum.mere}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Only family parents can view this dashboard."
+        )
+    
+    # Check if user has a family_id
+    if not current_user.family_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is not associated with a family."
+        )
+    
+    try:
+        dashboard_controller = DashboardController(db)
+        dashboard_data = dashboard_controller.get_parent_dashboard_data(current_user.family_id)
+        
+        logger.info(f"Parent dashboard data successfully retrieved for user {current_user.id}, family {current_user.family_id}")
+        return dashboard_data
+        
+    except ValueError as ve:
+        logger.error(f"Family not found: {str(ve)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(ve)
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving parent dashboard data: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve parent dashboard data: {str(e)}"
+        )
+
+
+@router.get("/youth-overview", response_model=YouthDashboardData)
+def get_youth_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get youth dashboard with community engagement and quick actions.
+    
+    Includes:
+    - Quick action buttons with notification counts
+    - Community statistics and engagement metrics
+    - Recent announcements and updates
+    - Youth-focused navigation
+    
+    Accessible to youth and family members.
+    """
+    logger.info(f"Youth dashboard access requested by user {current_user.id} with role {current_user.role}")
+    
+    # Allow access to youth and family members
+    if current_user.role not in {RoleEnum.youth, RoleEnum.pere, RoleEnum.mere}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Only youth and family members can view this dashboard."
+        )
+    
+    try:
+        dashboard_controller = DashboardController(db)
+        dashboard_data = dashboard_controller.get_youth_dashboard_data()
+        
+        logger.info(f"Youth dashboard data successfully retrieved for user {current_user.id}")
+        return dashboard_data
+        
+    except Exception as e:
+        logger.error(f"Error retrieving youth dashboard data: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve youth dashboard data: {str(e)}"
+        )
+
+
+@router.get("/family/{family_id}/stats", response_model=ParentDashboardData)
+def get_family_stats(
+    family_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get family statistics for a specific family.
+    This endpoint matches the frontend API call pattern: /families/{family_id}/stats
+    
+    Accessible to family members and admins.
+    """
+    logger.info(f"Family stats access requested for family {family_id} by user {current_user.id}")
+    
+    # Check permissions - either family member or admin
+    if current_user.role == RoleEnum.admin:
+        # Admin can access any family
+        pass
+    elif current_user.family_id == family_id and current_user.role in {RoleEnum.pere, RoleEnum.mere, RoleEnum.youth}:
+        # Family member can access their own family
+        pass
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You can only view your own family's statistics."
+        )
+    
+    try:
+        dashboard_controller = DashboardController(db)
+        dashboard_data = dashboard_controller.get_parent_dashboard_data(family_id)
+        
+        logger.info(f"Family stats successfully retrieved for family {family_id}")
+        return dashboard_data
+        
+    except ValueError as ve:
+        logger.error(f"Family not found: {str(ve)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(ve)
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving family stats: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve family statistics: {str(e)}"
         )
