@@ -324,3 +324,30 @@ def delete_activity(
 
     db.delete(activity)
     db.commit()
+
+
+# Add this endpoint after the read_activities_for_family route and before the parameterized routes
+
+@router.get("/{family_id}/recent", response_model=list[activity_schema.ActivityOut])
+def read_recent_activities_for_family(
+        family_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role == RoleEnum.church_pastor:
+        pass
+    elif current_user.role in [RoleEnum.mere, RoleEnum.pere, RoleEnum.other, RoleEnum.admin]:
+        if current_user.family_id != family_id:
+            raise HTTPException(status_code=403, detail="Not authorized to view activities for this family.")
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions to access family activities.")
+
+    # Build base query with joinedload to include family name
+    query = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.family_id == family_id)
+
+    # Order by date descending and limit to 4
+    query = query.order_by(Activity.date.desc()).limit(4)
+
+    # Get activities and convert to Pydantic models
+    activities = query.all()
+    return crud_activity.convert_activities_to_out(activities)

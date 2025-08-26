@@ -220,7 +220,7 @@ def get_youth_dashboard(
     logger.info(f"Youth dashboard access requested by user {current_user.id} with role {current_user.role}")
     
     # Allow access to youth and family members
-    if current_user.role not in {RoleEnum.youth, RoleEnum.pere, RoleEnum.mere}:
+    if current_user.role not in {RoleEnum.other, RoleEnum.pere, RoleEnum.mere}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. Only youth and family members can view this dashboard."
@@ -259,7 +259,7 @@ def get_family_stats(
     if current_user.role == RoleEnum.admin:
         # Admin can access any family
         pass
-    elif current_user.family_id == family_id and current_user.role in {RoleEnum.pere, RoleEnum.mere, RoleEnum.youth}:
+    elif current_user.family_id == family_id and current_user.role in {RoleEnum.pere, RoleEnum.mere, RoleEnum.other}:
         # Family member can access their own family
         pass
     else:
