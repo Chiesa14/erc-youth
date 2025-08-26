@@ -157,7 +157,7 @@ class DashboardController:
             implementation = round((completed_activities / total_activities * 100), 1) if total_activities > 0 and completed_activities else 0
             
             department_data.append(DepartmentData(
-                name=family_name,
+                name=f"{family_name} family",
                 youth=youth_count,
                 completion=bcc_completion,
                 implementation=implementation
@@ -697,7 +697,7 @@ class DashboardController:
                 time_str = f"{time_diff.days} day{'s' if time_diff.days > 1 else ''} ago"
             else:
                 time_str = "Recently scheduled"
-                
+
             recent_updates.append(YouthUpdate(
                 id=activity.id + 1000,  # Offset to avoid ID conflicts
                 title=f"{activity.description} - {activity.date.strftime('%A')}",
