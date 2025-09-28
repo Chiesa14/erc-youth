@@ -17,7 +17,11 @@ from app.schemas.user import RoleEnum
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_password_hash(password: str) -> str:
+    from logging import getLogger
+    logger = getLogger(__name__)
+    logger.info("Hashing password of length %s", len(password))
     return pwd_context.hash(password)
+
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
