@@ -17,9 +17,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     user = get_user_by_email(db, form_data.username)
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if user.role != RoleEnum.admin:
-        if not security.verify_password(form_data.password, user.hashed_password):
-            raise HTTPException(status_code=400, detail="Incorrect access code")
 
     token = security.create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}

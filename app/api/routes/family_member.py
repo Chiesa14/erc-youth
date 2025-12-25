@@ -203,7 +203,6 @@ def activate_member_account(
     return MemberActivationResponse(
         message="Account activated successfully",
         user_id=user.id,
-        access_code=user.access_code
     )
 
 

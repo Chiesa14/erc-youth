@@ -45,19 +45,12 @@ class UserOut(BaseModel, TimestampMixin):  # Now this works since TimestampMixin
     other: Optional[str]
     biography: Optional[str]
     profile_pic: Optional[str]
-    access_code: Optional[str] = None
 
     class Config:
         from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
         }
-
-class UserOutWithCode(UserOut):
-    access_code: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 class UserUpdate(BaseModel):
     biography: Optional[str] = None
@@ -66,6 +59,22 @@ class UserUpdate(BaseModel):
 
 class PasswordUpdate(BaseModel):
     new_password: constr(min_length=6)
+
+
+class UserActivationRequest(BaseModel):
+    user_id: int
+    temp_password: str
+    new_password: constr(min_length=6)
+
+
+class UserActivationResponse(BaseModel):
+    message: str
+    user_id: int
+
+
+class PasswordResetResponse(BaseModel):
+    message: str
+    user_id: int
 
 class AdminUserUpdate(BaseModel):
     full_name: Optional[str] = None

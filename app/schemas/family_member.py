@@ -83,7 +83,6 @@ class MemberActivationRequest(BaseModel):
 class MemberActivationResponse(BaseModel):
     message: str
     user_id: int
-    access_code: Optional[str] = None
 
 class AgeDistribution(BaseModel):
     zero_to_twelve: float

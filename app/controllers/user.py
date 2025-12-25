@@ -8,15 +8,8 @@ from app.schemas.user import FamilyCategoryEnum
 from app.core.security import get_password_hash
 from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
 from app.utils.logging_decorator import log_create, log_update, log_delete
-import random
-
-
-def generate_unique_access_code(db: Session) -> str:
-    while True:
-        code = f"{random.randint(1000, 9999)}"
-        if not db.query(User).filter(User.access_code == code).first():
-            return code
-
+from datetime import datetime
+from app.models.user_invitation import UserInvitation
 
 def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email).first()
@@ -41,13 +34,10 @@ def get_family_by_id_or_400(db: Session, family_id: int) -> Family:
 
 @log_create("user", "Created new user account")
 def create_user(db: Session, user: UserCreate):
-    access_code = None
+    if not user.password:
+        raise ValueError("Password is required")
 
-    if user.role != RoleEnum.admin:
-        access_code = generate_unique_access_code(db)
-        hashed_pw = get_password_hash(access_code)
-    else:
-        hashed_pw = get_password_hash(user.password)
+    hashed_pw = get_password_hash(user.password)
 
     family_id = None
     family_category = user.family_category
@@ -73,7 +63,6 @@ def create_user(db: Session, user: UserCreate):
         role=user.role,
         other=user.other,
         profile_pic=user.profile_pic,
-        access_code=access_code,
         family_id=family_id
     )
 
@@ -81,6 +70,42 @@ def create_user(db: Session, user: UserCreate):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+def create_or_update_user_invitation(db: Session, user_id: int, temp_password_hash: str) -> UserInvitation:
+    invitation = db.query(UserInvitation).filter(UserInvitation.user_id == user_id).first()
+    if invitation:
+        invitation.temp_password = temp_password_hash
+        invitation.is_activated = False
+        invitation.activated_at = None
+        invitation.created_at = datetime.utcnow()
+    else:
+        invitation = UserInvitation(user_id=user_id, temp_password=temp_password_hash)
+        db.add(invitation)
+
+    db.commit()
+    db.refresh(invitation)
+    return invitation
+
+
+def verify_user_temp_password(db: Session, user_id: int, temp_password_plain: str) -> bool:
+    invitation = db.query(UserInvitation).filter(UserInvitation.user_id == user_id).first()
+    if not invitation or invitation.is_activated:
+        return False
+
+    # Stored temp_password is a hashed value (same as FamilyMemberInvitation)
+    from app.core import security
+
+    return security.verify_password(temp_password_plain, invitation.temp_password)
+
+
+def mark_user_invitation_activated(db: Session, user_id: int) -> None:
+    invitation = db.query(UserInvitation).filter(UserInvitation.user_id == user_id).first()
+    if not invitation:
+        return
+    invitation.is_activated = True
+    invitation.activated_at = datetime.utcnow()
+    db.commit()
 
 
 @log_update("user", "Updated user profile")
@@ -103,17 +128,6 @@ def update_user_profile(db: Session, user: User, updates: UserUpdate) -> type[Us
     db.commit()
     db.refresh(db_user)
     return db_user
-
-
-@log_update("user", "Reset user access code")
-def reset_user_access_code(db: Session, user: User) -> tuple[User, str]:
-    new_code = generate_unique_access_code(db)
-    user.access_code = new_code
-    user.hashed_password = get_password_hash(new_code)
-    # updated_at will be automatically set by the middleware
-    db.commit()
-    db.refresh(user)
-    return user, new_code
 
 
 @log_update("user", "Changed user password")

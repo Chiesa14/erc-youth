@@ -78,3 +78,54 @@ class EmailService:
         except Exception as e:
             logger.error(f"Error sending email: {str(e)}")
             return False
+
+
+    def send_user_invitation_email(
+            self,
+            to_email: str,
+            user_name: str,
+            temp_password: str,
+            user_id: int,
+            frontend_url: str = None
+    ) -> bool:
+        try:
+            if frontend_url is None:
+                frontend_url = settings.frontend_change_password_url
+
+            msg = MIMEMultipart()
+            msg['From'] = self.from_email
+            msg['To'] = to_email
+            msg['Subject'] = "Welcome - Set Up Your Account"
+
+            encoded_temp_password = urllib.parse.quote(temp_password)
+            activation_link = f"{frontend_url}?user_id={user_id}&temp_password={encoded_temp_password}"
+
+            body = f"""
+            Dear {user_name},
+
+            An account has been created for you. To complete your account setup, please follow these steps:
+
+            1. Click this link to set your password and activate your account:
+               {activation_link}
+
+            2. Your temporary password is: {temp_password}
+            3. Your email address is: {to_email}
+
+            Please keep this information secure and change your password immediately after your first login.
+
+            Best regards,
+            YouthTrack
+            """
+
+            msg.attach(MIMEText(body, 'plain'))
+
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            server.starttls()
+            server.login(self.smtp_username, self.smtp_password)
+            server.sendmail(self.from_email, to_email, msg.as_string())
+            server.quit()
+
+            return True
+        except Exception as e:
+            logger.error(f"Error sending email: {str(e)}")
+            return False

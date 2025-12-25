@@ -275,9 +275,6 @@ def create_user_from_member(db: Session, member_id: int, new_password: str) -> U
     # Create the user
     db_user = create_user(db, user_create)
 
-    # ✅ Update password to the correct one (since access_code was used initially)
-    update_user_password(db, db_user, new_password)
-
     # Mark invitation as activated
     member.invitation.is_activated = True
     member.invitation.activated_at = datetime.utcnow()

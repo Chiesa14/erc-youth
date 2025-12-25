@@ -6,8 +6,10 @@ import app.controllers.user as crud_user
 import app.schemas.user as user_schema
 from app.db.session import get_db
 from app.core.security import get_current_active_user, get_current_user
+from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import RoleEnum
+from app.services.email_service import EmailService
 from app.utils.timestamps import (
     parse_timestamp_filters,
     apply_timestamp_filters,
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Users"])
 
-@router.post("/", response_model=user_schema.UserOutWithCode, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=user_schema.UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(
     user: user_schema.UserCreate,
     current_user: User = Depends(get_current_active_user),
@@ -33,9 +35,55 @@ def create_user(
         raise HTTPException(status_code=400, detail="Email already exists")
 
     try:
-        return crud_user.create_user(db, user)
+        email_service = EmailService()
+        temp_password: str | None = None
+
+        # If admin didn't provide a password, create a secure temporary password
+        if not user.password:
+            temp_password = email_service.generate_temporary_password()
+            user = user.model_copy(update={"password": temp_password})
+
+        created_user = crud_user.create_user(db, user)
+
+        # If we generated a temporary password, create/update invitation and email user
+        if temp_password:
+            crud_user.create_or_update_user_invitation(
+                db,
+                user_id=created_user.id,
+                temp_password_hash=get_password_hash(temp_password),
+            )
+
+            email_sent = email_service.send_user_invitation_email(
+                to_email=created_user.email,
+                user_name=created_user.full_name,
+                temp_password=temp_password,
+                user_id=created_user.id,
+            )
+
+            if not email_sent:
+                logger.warning(f"Failed to send user invitation email to {created_user.email}")
+
+        return created_user
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/activate", response_model=user_schema.UserActivationResponse)
+def activate_user_account(
+    request: user_schema.UserActivationRequest,
+    db: Session = Depends(get_db),
+):
+    if not crud_user.verify_user_temp_password(db, request.user_id, request.temp_password):
+        raise HTTPException(status_code=400, detail="Invalid temporary password or invitation already used.")
+
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    crud_user.update_user_password(db, user, request.new_password)
+    crud_user.mark_user_invitation_activated(db, request.user_id)
+
+    return user_schema.UserActivationResponse(message="Account activated successfully", user_id=request.user_id)
 
 
 @router.get("/me", response_model=user_schema.UserOut)
@@ -56,25 +104,6 @@ def update_my_profile(
     return updated_user
 
 
-@router.put("/reset-access-code/{user_id}", response_model=user_schema.UserOutWithCode)
-def admin_reset_access_code(
-        user_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_active_user),
-):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can reset access codes.")
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    updated_user, new_code = crud_user.reset_user_access_code(db, user)
-
-    # Return user info + new access code (so admin can notify user)
-    return user_schema.UserOutWithCode.from_orm(updated_user).copy(update={"access_code": new_code})
-
-
 @router.put("/update-password/{user_id}", response_model=user_schema.UserOut)
 def admin_update_user_password(
         user_id: int,
@@ -91,6 +120,48 @@ def admin_update_user_password(
 
     updated_user = crud_user.update_user_password(db, user, password_update.new_password)
     return updated_user
+
+
+@router.post("/reset-password/{user_id}", response_model=user_schema.PasswordResetResponse)
+def admin_reset_user_password(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can reset passwords.")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    email_service = EmailService()
+    temp_password = email_service.generate_temporary_password()
+
+    # Set the new password immediately (user can still change it via activation link)
+    crud_user.update_user_password(db, user, temp_password)
+
+    # Create/refresh invitation so activation link works and is marked not activated
+    crud_user.create_or_update_user_invitation(
+        db,
+        user_id=user.id,
+        temp_password_hash=get_password_hash(temp_password),
+    )
+
+    email_sent = email_service.send_user_invitation_email(
+        to_email=user.email,
+        user_name=user.full_name,
+        temp_password=temp_password,
+        user_id=user.id,
+    )
+
+    if not email_sent:
+        raise HTTPException(status_code=500, detail="Failed to send reset password email.")
+
+    return user_schema.PasswordResetResponse(
+        message="Password reset email sent successfully",
+        user_id=user.id,
+    )
 
 
 @router.get("/all", response_model=List[user_schema.UserOut])
