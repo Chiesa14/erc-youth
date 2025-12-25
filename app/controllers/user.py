@@ -4,6 +4,7 @@ from typing import List, Any
 from app.models.family import Family
 from app.models.user import User
 from app.schemas.user import UserCreate, RoleEnum, UserUpdate, AdminUserUpdate
+from app.schemas.user import FamilyCategoryEnum
 from app.core.security import get_password_hash
 from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
 from app.utils.logging_decorator import log_create, log_update, log_delete
@@ -31,6 +32,13 @@ def get_or_create_family(db: Session, category: str, name: str) -> Family:
     return family
 
 
+def get_family_by_id_or_400(db: Session, family_id: int) -> Family:
+    family = db.query(Family).filter(Family.id == family_id).first()
+    if not family:
+        raise ValueError(f"Family with id '{family_id}' not found")
+    return family
+
+
 @log_create("user", "Created new user account")
 def create_user(db: Session, user: UserCreate):
     access_code = None
@@ -42,9 +50,17 @@ def create_user(db: Session, user: UserCreate):
         hashed_pw = get_password_hash(user.password)
 
     family_id = None
-    if user.family_category is not None and user.family_name is not None:
-        family = get_or_create_family(db, user.family_category.value, user.family_name)
+    family_category = user.family_category
+    family_name = user.family_name
+    if user.family_id is not None:
+        family = get_family_by_id_or_400(db, user.family_id)
         family_id = family.id
+
+        family_name = family.name
+        try:
+            family_category = FamilyCategoryEnum(family.category)
+        except Exception:
+            family_category = None
 
     db_user = User(
         full_name=user.full_name,
@@ -52,8 +68,8 @@ def create_user(db: Session, user: UserCreate):
         hashed_password=hashed_pw,
         gender=user.gender,
         phone=user.phone,
-        family_category=user.family_category,
-        family_name=user.family_name,
+        family_category=family_category,
+        family_name=family_name,
         role=user.role,
         other=user.other,
         profile_pic=user.profile_pic,
@@ -141,15 +157,20 @@ def admin_update_user(db: Session, user_id: int, updates: AdminUserUpdate) -> ty
     for field, value in updates.dict(exclude_unset=True).items():
         setattr(db_user, field, value)
 
-    # Handle family relation if both category and name are updated
-    if ('family_category' in updates.dict(exclude_unset=True)
-        and 'family_name' in updates.dict(exclude_unset=True)):
-        family = get_or_create_family(
-            db,
-            updates.family_category.value,
-            updates.family_name
-        )
-        db_user.family_id = family.id
+    # Handle family relation via family_id (explicit link; no implicit creation)
+    if 'family_id' in updates.dict(exclude_unset=True):
+        if updates.family_id is None:
+            db_user.family_id = None
+            db_user.family_name = None
+            db_user.family_category = None
+        else:
+            family = get_family_by_id_or_400(db, updates.family_id)
+            db_user.family_id = family.id
+            db_user.family_name = family.name
+            try:
+                db_user.family_category = FamilyCategoryEnum(family.category)
+            except Exception:
+                db_user.family_category = None
 
     # updated_at will be automatically set by the middleware
     db.commit()

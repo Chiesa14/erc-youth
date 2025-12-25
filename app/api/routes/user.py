@@ -32,7 +32,10 @@ def create_user(
     if db_user:
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    return crud_user.create_user(db, user)
+    try:
+        return crud_user.create_user(db, user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/me", response_model=user_schema.UserOut)
@@ -152,6 +155,8 @@ def admin_update_user_route(
     try:
         updated_user = crud_user.admin_update_user(db, user_id, updates)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        message = str(e)
+        status_code = 404 if message == "User not found" else 400
+        raise HTTPException(status_code=status_code, detail=message)
 
     return updated_user
