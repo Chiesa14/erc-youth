@@ -51,6 +51,8 @@ class ChurchDashboardData(BaseModel):
 # Admin Dashboard Schemas
 class AdminStats(BaseModel):
     total_users: int
+    active_users: int
+    inactive_users: int
     new_users_this_month: int
     new_users_last_month: int
     reports_submitted: int
@@ -74,6 +76,12 @@ class RecentActivity(BaseModel):
 
 class AdminDashboardData(BaseModel):
     stats: AdminStats
+    user_gender_distribution: List[GenderDistribution]
+    youth_members_count: int
+    youth_members_young_count: int
+    youth_members_mature_count: int
+    youth_members_target: int
+    youth_members_progress_percent: float
     recent_activities: List[RecentActivity]
     last_updated: datetime
 

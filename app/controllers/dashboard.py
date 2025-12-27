@@ -10,6 +10,7 @@ from app.models.family_document import FamilyDocument
 from app.models.family_member import FamilyMember
 from app.models.family_activity import Activity
 from app.models.user import User
+from app.models.chat import UserPresence
 from app.models.system_log import SystemLog
 from app.models.announcement import Announcement
 from app.models.feedback import Feedback
@@ -302,6 +303,68 @@ class DashboardController:
 
         # Get user statistics
         total_users = self.db.query(User).count()
+
+        # Presence-based active/inactive counts.
+        # A user is considered active if they have a presence row that is online
+        # and has been seen recently.
+        presence_window = timedelta(minutes=5)
+        active_cutoff = now - presence_window
+
+        active_users = self.db.query(UserPresence).filter(
+            and_(
+                UserPresence.is_online.is_(True),
+                UserPresence.last_seen >= active_cutoff,
+            )
+        ).count()
+        inactive_users = max(total_users - active_users, 0)
+
+        # User gender distribution (based on User.gender)
+        user_gender_counts = self.db.query(
+            User.gender,
+            func.count(User.id).label("count")
+        ).group_by(User.gender).all()
+        total_users_with_gender = sum(count for _, count in user_gender_counts)
+
+        user_gender_distribution = []
+        gender_colors = {
+            "Male": "hsl(var(--chart-1))",
+            "Female": "hsl(var(--chart-2))",
+        }
+        for gender, count in user_gender_counts:
+            if gender and total_users_with_gender > 0:
+                percentage = round((count / total_users_with_gender * 100), 1)
+                user_gender_distribution.append({
+                    "name": gender.value,
+                    "value": percentage,
+                    "color": gender_colors.get(gender.value, "hsl(var(--chart-3))"),
+                })
+
+        # Youth members progress (FamilyMember count) toward target
+        youth_members_target = 500
+        youth_members_count = self.db.query(FamilyMember).count()
+
+        youth_counts_by_family_category = dict(
+            self.db.query(
+                Family.category,
+                func.count(FamilyMember.id),
+            )
+            .join(FamilyMember, Family.id == FamilyMember.family_id)
+            .group_by(Family.category)
+            .all()
+        )
+
+        youth_members_young_count = int(
+            youth_counts_by_family_category.get("Young", 0)
+            + youth_counts_by_family_category.get("young", 0)
+        )
+        youth_members_mature_count = int(
+            youth_counts_by_family_category.get("Mature", 0)
+            + youth_counts_by_family_category.get("mature", 0)
+        )
+        youth_members_progress_percent = round(
+            min((youth_members_count / youth_members_target) * 100, 100.0) if youth_members_target > 0 else 0.0,
+            1,
+        )
         
         # Users created this month
         new_users_this_month = self.db.query(User).filter(
@@ -338,6 +401,8 @@ class DashboardController:
         # Create admin stats
         admin_stats = AdminStats(
             total_users=total_users,
+            active_users=active_users,
+            inactive_users=inactive_users,
             new_users_this_month=new_users_this_month,
             new_users_last_month=new_users_last_month,
             reports_submitted=reports_submitted,
@@ -396,6 +461,12 @@ class DashboardController:
         
         return AdminDashboardData(
             stats=admin_stats,
+            user_gender_distribution=user_gender_distribution,
+            youth_members_count=youth_members_count,
+            youth_members_young_count=youth_members_young_count,
+            youth_members_mature_count=youth_members_mature_count,
+            youth_members_target=youth_members_target,
+            youth_members_progress_percent=youth_members_progress_percent,
             recent_activities=recent_activities,
             last_updated=datetime.now(timezone.utc)
         )
