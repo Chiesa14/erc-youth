@@ -7,7 +7,7 @@ from starlette.responses import JSONResponse
 
 from app.models import Family
 from app.models.family_document import FamilyDocument
-from app.schemas.family_document import DocumentType, DocumentOut, ReportStatus, LetterStatus
+from app.schemas.family_document import DocumentType, DocumentOut, ReportStatus, LetterStatus, ReportCreate, LetterCreate
 from app.controllers import family_document as doc_controller
 from app.core.security import get_db, get_current_active_user, get_current_admin_user, get_current_admin_or_pastor_user
 from app.models.user import User
@@ -61,6 +61,38 @@ def upload_document(
     return doc_controller.upload_family_document(db, current_user.family_id, type, file)
 
 
+@router.post("/report", response_model=DocumentOut)
+def create_report(
+        payload: ReportCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.family_id:
+        raise HTTPException(status_code=400, detail="User has no assigned family")
+    return doc_controller.create_structured_report(
+        db,
+        current_user.family_id,
+        payload.title,
+        payload.report_data,
+    )
+
+
+@router.post("/letter", response_model=DocumentOut)
+def create_letter(
+        payload: LetterCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.family_id:
+        raise HTTPException(status_code=400, detail="User has no assigned family")
+    return doc_controller.create_rich_text_letter(
+        db,
+        current_user.family_id,
+        payload.title,
+        payload.content_html,
+    )
+
+
 @router.get("/{doc_id}/download")
 def download_document(
         doc_id: int,
@@ -68,6 +100,8 @@ def download_document(
         current_user: User = Depends(get_current_active_user)
 ):
     doc = doc_controller.get_document_by_id(db, doc_id, current_user.family_id)
+    if doc.storage_type != "file":
+        raise HTTPException(status_code=400, detail="This document is stored in the database and cannot be downloaded as a file")
     return FileResponse(doc.file_path, filename=doc.original_filename)
 
 
@@ -192,6 +226,10 @@ async def admin_list_all_documents(
             "original_filename": doc.original_filename,
             "status": doc.status,
             "uploaded_at": doc.uploaded_at.isoformat(),
+            "storage_type": getattr(doc, "storage_type", "file"),
+            "title": getattr(doc, "title", None),
+            "content_json": getattr(doc, "content_json", None),
+            "content_html": getattr(doc, "content_html", None),
             "created_at": doc.created_at.isoformat(),
             "updated_at": doc.updated_at.isoformat(),
             "family": {
@@ -223,6 +261,8 @@ def admin_download_document(
     Admin endpoint to download any document by ID (across all families)
     """
     doc = doc_controller.get_admin_document_by_id(db, doc_id)
+    if doc.storage_type != "file":
+        raise HTTPException(status_code=400, detail="This document is stored in the database and cannot be downloaded as a file")
     return FileResponse(doc.file_path, filename=doc.original_filename)
 
 

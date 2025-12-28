@@ -1,6 +1,8 @@
 from enum import Enum
 from pydantic import BaseModel, field_serializer
 from datetime import datetime
+from typing import Any, Optional
+
 from app.utils.timestamps import TimestampMixin
 
 
@@ -25,6 +27,11 @@ class DocumentOut(BaseModel, TimestampMixin):
     status: str
     uploaded_at: datetime
 
+    storage_type: str = "file"
+    title: Optional[str] = None
+    content_json: Optional[str] = None
+    content_html: Optional[str] = None
+
     @field_serializer('uploaded_at')
     def serialize_uploaded_at(self, uploaded_at: datetime, _info):
         return uploaded_at.isoformat()
@@ -39,3 +46,13 @@ class DocumentOut(BaseModel, TimestampMixin):
 
     class Config:
         from_attributes = True
+
+
+class ReportCreate(BaseModel):
+    title: str
+    report_data: dict[str, Any]
+
+
+class LetterCreate(BaseModel):
+    title: str
+    content_html: str

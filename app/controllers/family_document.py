@@ -1,5 +1,6 @@
 import os
 import uuid
+import json
 from sqlalchemy.orm import Session
 from app.models.family_document import FamilyDocument
 from app.schemas.family_document import DocumentType, ReportStatus, LetterStatus
@@ -50,12 +51,65 @@ def upload_family_document(
     return db_doc
 
 
+@log_upload("family_documents", "Created structured report")
+def create_structured_report(
+        db: Session,
+        family_id: int,
+        title: str,
+        report_data: dict,
+) -> FamilyDocument:
+    db_doc = FamilyDocument(
+        family_id=family_id,
+        file_path=None,
+        type=DocumentType.report.value,
+        original_filename=title,
+        uploaded_at=datetime.utcnow(),
+        status=ReportStatus.pending.value,
+        storage_type="structured",
+        title=title,
+        content_json=json.dumps(report_data),
+        content_html=None,
+    )
+    db.add(db_doc)
+    db.commit()
+    db.refresh(db_doc)
+    return db_doc
+
+
+@log_upload("family_documents", "Created rich-text letter")
+def create_rich_text_letter(
+        db: Session,
+        family_id: int,
+        title: str,
+        content_html: str,
+) -> FamilyDocument:
+    db_doc = FamilyDocument(
+        family_id=family_id,
+        file_path=None,
+        type=DocumentType.letter.value,
+        original_filename=title,
+        uploaded_at=datetime.utcnow(),
+        status=LetterStatus.pending.value,
+        storage_type="structured",
+        title=title,
+        content_json=None,
+        content_html=content_html,
+    )
+    db.add(db_doc)
+    db.commit()
+    db.refresh(db_doc)
+    return db_doc
+
+
 @log_view("family_documents", "Viewed family document")
 def get_document_by_id(db: Session, doc_id: int, family_id: int) -> FamilyDocument:
     """Get document by ID for a specific family (regular user access)"""
     doc = db.query(FamilyDocument).filter_by(id=doc_id, family_id=family_id).first()
-    if not doc or not os.path.exists(doc.file_path):
+    if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    if doc.storage_type == "file":
+        if not doc.file_path or not os.path.exists(doc.file_path):
+            raise HTTPException(status_code=404, detail="Document file not found")
     return doc
 
 
@@ -65,15 +119,16 @@ def get_admin_document_by_id(db: Session, doc_id: int) -> FamilyDocument:
     doc = db.query(FamilyDocument).filter_by(id=doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not os.path.exists(doc.file_path):
-        raise HTTPException(status_code=404, detail="Document file not found on disk")
+    if doc.storage_type == "file":
+        if not doc.file_path or not os.path.exists(doc.file_path):
+            raise HTTPException(status_code=404, detail="Document file not found on disk")
     return doc
 
 
 @log_delete("family_documents", "Deleted family document")
 def delete_document(db: Session, doc: FamilyDocument):
     """Delete document (works for both regular users and admins)"""
-    if os.path.exists(doc.file_path):
+    if doc.file_path and os.path.exists(doc.file_path):
         os.remove(doc.file_path)
     db.delete(doc)
     db.commit()
