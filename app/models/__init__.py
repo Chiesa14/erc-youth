@@ -2,6 +2,7 @@ from sqlalchemy.orm import relationship
 
 from .family import Family
 from .family_activity import Activity
+from .family_activity_checkin import ActivityCheckinSession, ActivityAttendance
 from .recommendation import Program, Comment
 from .feedback import Feedback, Reply
 from .system_log import SystemLog

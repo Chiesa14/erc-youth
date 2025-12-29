@@ -12,6 +12,11 @@ def create_activity(db: Session, activity: ActivityCreate):
     db.commit()
     db.refresh(db_activity)
 
+    # Create the check-in session immediately so the QR can be used later.
+    # Import locally to avoid circular imports.
+    from app.controllers.activity_checkin import upsert_checkin_session
+    upsert_checkin_session(db, db_activity)
+
     # Get the activity with family relationship loaded
     activity_with_family = db.query(Activity).options(joinedload(Activity.family)).filter(
         Activity.id == db_activity.id).first()

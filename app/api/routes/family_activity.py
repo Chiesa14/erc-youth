@@ -10,6 +10,10 @@ from app.core.security import get_current_active_user
 import app.controllers.family_activity as crud_activity
 import app.schemas.family_activity as activity_schema
 from app.schemas.user import RoleEnum
+from app.schemas.activity_checkin import ActivityCheckinSessionOut, ActivityAttendanceOut
+from app.core.config import settings
+import app.controllers.activity_checkin as crud_checkin
+from app.models.family_activity_checkin import ActivityCheckinSession
 from app.utils.timestamps import (
     parse_timestamp_filters,
     apply_timestamp_filters,
@@ -65,19 +69,25 @@ def read_all_activities(
         skip: int = Query(0, ge=0),
         limit: int = Query(100, ge=1, le=1000),
 ):
-    require_pastor_or_parent(current_user)
+    if current_user.role not in [RoleEnum.church_pastor, RoleEnum.mere, RoleEnum.pere, RoleEnum.other, RoleEnum.admin]:
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions to access activities",
+        )
 
     # Build base query with joinedload to include family name
     query = db.query(Activity).options(joinedload(Activity.family))
 
-    # Apply family restriction for non-pastors
-    if current_user.role != RoleEnum.church_pastor:
+    if current_user.role == RoleEnum.church_pastor:
+        if family_id:
+            query = query.filter(Activity.family_id == family_id)
+    elif current_user.role in [RoleEnum.other, RoleEnum.admin]:
+        if family_id:
+            query = query.filter(Activity.family_id == family_id)
+    else:
         if not current_user.family_id:
             raise HTTPException(status_code=400, detail="User is not assigned to a family.")
         query = query.filter(Activity.family_id == current_user.family_id)
-    else:
-        if family_id:
-            query = query.filter(Activity.family_id == family_id)
 
     # Apply date filters
     if activity_date:
@@ -297,6 +307,9 @@ def update_activity(
     db.commit()
     db.refresh(activity)
 
+    # Refresh check-in window if date/time changed.
+    crud_checkin.upsert_checkin_session(db, activity)
+
     # Convert to Pydantic model with family_name populated
     activity_dict = {
         **activity.__dict__,
@@ -304,6 +317,93 @@ def update_activity(
     }
 
     return activity_schema.ActivityOut(**activity_dict)
+
+
+@router.get("/{activity_id}/checkin-session", response_model=ActivityCheckinSessionOut)
+def get_checkin_session(
+        activity_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user),
+):
+    activity = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    if current_user.role not in [RoleEnum.church_pastor, RoleEnum.other]:
+        if not current_user.family_id or current_user.family_id != activity.family_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this activity")
+
+    session = db.query(ActivityCheckinSession).filter(ActivityCheckinSession.activity_id == activity.id).first()
+    if not session:
+        session = crud_checkin.upsert_checkin_session(db, activity)
+
+    return ActivityCheckinSessionOut(
+        activity_id=activity.id,
+        token=session.token,
+        checkin_url=crud_checkin.build_checkin_url(session.token),
+        is_active=session.is_active,
+        valid_from=session.valid_from,
+        valid_until=session.valid_until,
+    )
+
+
+@router.post("/{activity_id}/checkin-session", response_model=ActivityCheckinSessionOut)
+def create_or_refresh_checkin_session(
+        activity_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user),
+):
+    require_pastor_or_parent(current_user)
+
+    activity = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    if current_user.role != RoleEnum.church_pastor:
+        if not current_user.family_id or current_user.family_id != activity.family_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this activity")
+
+    session = crud_checkin.upsert_checkin_session(db, activity)
+    return ActivityCheckinSessionOut(
+        activity_id=activity.id,
+        token=session.token,
+        checkin_url=crud_checkin.build_checkin_url(session.token),
+        is_active=session.is_active,
+        valid_from=session.valid_from,
+        valid_until=session.valid_until,
+    )
+
+
+@router.get("/{activity_id}/attendances", response_model=list[ActivityAttendanceOut])
+def list_activity_attendances(
+        activity_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user),
+):
+    require_pastor_or_parent(current_user)
+
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    if current_user.role != RoleEnum.church_pastor:
+        if not current_user.family_id or current_user.family_id != activity.family_id:
+            raise HTTPException(status_code=403, detail="Not authorized to view attendances for this activity")
+
+    attendances = crud_checkin.list_attendances_for_activity(db, activity_id)
+    result: list[ActivityAttendanceOut] = []
+    for a in attendances:
+        result.append(
+            ActivityAttendanceOut(
+                id=a.id,
+                activity_id=a.activity_id,
+                attendee_name=a.attendee_name,
+                family_of_origin_id=a.family_of_origin_id,
+                family_of_origin_name=a.family_of_origin.name if a.family_of_origin else None,
+                created_at=a.created_at,
+            )
+        )
+    return result
 
 
 @router.delete("/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)

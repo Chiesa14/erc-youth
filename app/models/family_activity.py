@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Enum, ForeignKey, Text, DateTime
+from sqlalchemy import Column, Integer, String, Date, Enum, ForeignKey, Text, DateTime, Time
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
@@ -11,6 +11,8 @@ class Activity(Base):
     id = Column(Integer, primary_key=True, index=True)
     family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
     date = Column(Date, nullable=False)
+    start_time = Column(Time, nullable=True)
+    end_time = Column(Time, nullable=True)
     status = Column(Enum(ActivityStatusEnum), nullable=False)
     category = Column(Enum(ActivityCategoryEnum), nullable=False)
     type = Column(String, nullable=False)  # We'll store type as string, but validate on input
@@ -22,4 +24,19 @@ class Activity(Base):
 
     # Relationship
     family = relationship("Family", back_populates="activities")
+
+    # QR check-in relationships
+    checkin_session = relationship(
+        "ActivityCheckinSession",
+        back_populates="activity",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    attendances = relationship(
+        "ActivityAttendance",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
