@@ -43,7 +43,7 @@ class ActivityCreate(BaseModel):
     date: date
     start_time: Optional[time] = None
     end_time: Optional[time] = None
-    status: ActivityStatusEnum  # Example: 'planned', 'completed'
+    status: Optional[ActivityStatusEnum] = None  # Server enforces based on date/time
     category: ActivityCategoryEnum
     type: str                   # Example: 'Prayer calendar', 'Illness', etc.
     description: Optional[str]

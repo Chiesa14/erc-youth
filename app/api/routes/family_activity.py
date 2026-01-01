@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, time
 from app.api.routes.family_member import require_parent
 from app.db.session import get_db
 from app.models.user import User
@@ -22,6 +23,47 @@ from app.utils.timestamps import (
 
 router = APIRouter(tags=["Activities"])
 
+def _today_local() -> date:
+    return datetime.now().date()
+
+
+def _now_local() -> datetime:
+    return datetime.now()
+
+def _compute_status_for_create(
+    activity_date: date,
+    start_time: Optional[time],
+) -> activity_schema.ActivityStatusEnum:
+    today = _today_local()
+    now = _now_local()
+
+    if activity_date > today:
+        return activity_schema.ActivityStatusEnum.planned
+    if activity_date < today:
+        return activity_schema.ActivityStatusEnum.ongoing
+
+    if start_time and start_time > now.time():
+        return activity_schema.ActivityStatusEnum.planned
+    return activity_schema.ActivityStatusEnum.ongoing
+
+def _validate_status_transition(
+    *,
+    current_status: activity_schema.ActivityStatusEnum,
+    new_status: activity_schema.ActivityStatusEnum,
+) -> bool:
+    if current_status == new_status:
+        return True
+    if current_status == activity_schema.ActivityStatusEnum.planned:
+        return new_status in [
+            activity_schema.ActivityStatusEnum.ongoing,
+            activity_schema.ActivityStatusEnum.cancelled,
+        ]
+    if current_status == activity_schema.ActivityStatusEnum.ongoing:
+        return new_status in [
+            activity_schema.ActivityStatusEnum.completed,
+            activity_schema.ActivityStatusEnum.cancelled,
+        ]
+    return False
 
 def require_pastor_or_parent(current_user: User):
     """Helper function to check if user is pastor or parent"""
@@ -31,7 +73,6 @@ def require_pastor_or_parent(current_user: User):
             detail="Only pastors and parents can access this resource"
         )
 
-
 # POST route - create activity
 @router.post("/", response_model=activity_schema.ActivityOut, status_code=status.HTTP_201_CREATED)
 def create_activity(
@@ -40,12 +81,22 @@ def create_activity(
         current_user: User = Depends(get_current_active_user),
 ):
     require_parent(current_user)
+    today = _today_local()
+    if activity.date < today:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot create an activity in the past.",
+        )
+
     if not activity.family_id:
         if not current_user.family_id:
             raise HTTPException(status_code=400, detail="User is not assigned to a family.")
         activity_data = activity.model_copy(update={"family_id": current_user.family_id})
     else:
         activity_data = activity
+
+    enforced_status = _compute_status_for_create(activity_data.date, activity_data.start_time)
+    activity_data = activity_data.model_copy(update={"status": enforced_status})
     return crud_activity.create_activity(db, activity_data)
 
 
@@ -126,8 +177,19 @@ def read_all_activities(
     # Apply pagination
     query = query.offset(skip).limit(limit)
 
-    # Get activities and convert to Pydantic models
+    # Get activities
     activities = query.all()
+
+    # Auto-advance planned activities to ongoing when their date arrives
+    today = _today_local()
+    changed = False
+    for act in activities:
+        if act.status == activity_schema.ActivityStatusEnum.planned and act.date <= today:
+            act.status = activity_schema.ActivityStatusEnum.ongoing
+            changed = True
+    if changed:
+        db.commit()
+
     return crud_activity.convert_activities_to_out(activities)
 
 
@@ -205,6 +267,81 @@ def get_activity_statistics(
     return stats
 
 
+@router.get("/type-status-summary", response_model=list[dict])
+def get_activity_type_status_summary(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_active_user),
+        family_id: Optional[int] = Query(None),
+        date_from: Optional[date] = Query(None),
+        date_to: Optional[date] = Query(None),
+):
+    require_pastor_or_parent(current_user)
+
+    query = db.query(
+        Activity.type,
+        Activity.status,
+        func.count(Activity.id).label("count"),
+    )
+
+    if current_user.role == RoleEnum.church_pastor:
+        if family_id:
+            query = query.filter(Activity.family_id == family_id)
+    else:
+        if not current_user.family_id:
+            raise HTTPException(status_code=400, detail="User is not assigned to a family.")
+        query = query.filter(Activity.family_id == current_user.family_id)
+
+    if date_from:
+        query = query.filter(Activity.date >= date_from)
+    if date_to:
+        query = query.filter(Activity.date <= date_to)
+
+    query = query.group_by(Activity.type, Activity.status)
+
+    rows = query.all()
+
+    known_types: list[str] = [
+        *[t.value for t in activity_schema.SpiritualTypeEnum],
+        *[t.value for t in activity_schema.SocialTypeEnum],
+    ]
+
+    by_type = {
+        t: {
+            "type": t,
+            "planned": 0,
+            "ongoing": 0,
+            "completed": 0,
+        }
+        for t in known_types
+    }
+
+    for row in rows:
+        activity_type = row.type
+        status_value = row.status.value if hasattr(row.status, "value") else str(row.status)
+
+        if activity_type not in by_type:
+            by_type[activity_type] = {
+                "type": activity_type,
+                "planned": 0,
+                "ongoing": 0,
+                "completed": 0,
+            }
+
+        if status_value == activity_schema.ActivityStatusEnum.planned.value:
+            by_type[activity_type]["planned"] += row.count
+        elif status_value == activity_schema.ActivityStatusEnum.ongoing.value:
+            by_type[activity_type]["ongoing"] += row.count
+        elif status_value == activity_schema.ActivityStatusEnum.completed.value:
+            by_type[activity_type]["completed"] += row.count
+
+    ordered: list[dict] = [by_type[t] for t in known_types if t in by_type]
+    extra = sorted(
+        (v for k, v in by_type.items() if k not in known_types),
+        key=lambda x: x["type"],
+    )
+    return [*ordered, *extra]
+
+
 @router.get("/family/{family_id}", response_model=list[activity_schema.ActivityOut])
 def read_activities_for_family(
         family_id: int,
@@ -255,8 +392,29 @@ def read_activities_for_family(
     else:
         query = query.order_by(Activity.date.desc())
 
-    # Get activities and convert to Pydantic models
+    # Get activities
     activities = query.all()
+
+    # Auto-advance planned activities to ongoing when their date arrives.
+    # If an activity has a start_time, only advance once that start_time is reached.
+    now = _now_local()
+    today = now.date()
+    changed = False
+    for act in activities:
+        if act.status != activity_schema.ActivityStatusEnum.planned:
+            continue
+
+        if act.date < today:
+            act.status = activity_schema.ActivityStatusEnum.ongoing
+            changed = True
+        elif act.date == today:
+            if act.start_time is None or act.start_time <= now.time():
+                act.status = activity_schema.ActivityStatusEnum.ongoing
+                changed = True
+
+    if changed:
+        db.commit()
+
     return crud_activity.convert_activities_to_out(activities)
 
 
@@ -300,8 +458,44 @@ def update_activity(
     if current_user.family_id != activity.family_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this activity")
 
-    for field, value in updated_data.dict(exclude_unset=True).items():
+    now = _now_local()
+    today = now.date()
+    incoming = updated_data.dict(exclude_unset=True)
+
+    effective_date = incoming.get("date", activity.date)
+    effective_status = incoming.get("status", activity.status)
+
+    if "date" in incoming and incoming["date"] is not None:
+        if incoming["date"] < today:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot set activity date in the past.",
+            )
+
+    if "status" in incoming and incoming["status"] is not None:
+        new_status = incoming["status"]
+        if not _validate_status_transition(current_status=activity.status, new_status=new_status):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid status transition.",
+            )
+
+    if effective_date > today and effective_status != activity_schema.ActivityStatusEnum.planned:
+        raise HTTPException(
+            status_code=400,
+            detail="Future activities can only be Planned.",
+        )
+
+    for field, value in incoming.items():
         setattr(activity, field, value)
+
+    # Ensure planned activities are not kept as planned once the date/time is reached
+    if activity.status == activity_schema.ActivityStatusEnum.planned:
+        if activity.date < today:
+            activity.status = activity_schema.ActivityStatusEnum.ongoing
+        elif activity.date == today:
+            if activity.start_time is None or activity.start_time <= now.time():
+                activity.status = activity_schema.ActivityStatusEnum.ongoing
 
     # updated_at will be automatically set by the middleware
     db.commit()
@@ -448,6 +642,27 @@ def read_recent_activities_for_family(
     # Order by date descending and limit to 4
     query = query.order_by(Activity.date.desc()).limit(4)
 
-    # Get activities and convert to Pydantic models
+    # Get activities
     activities = query.all()
+
+    # Auto-advance planned activities to ongoing when their date arrives.
+    # If an activity has a start_time, only advance once that start_time is reached.
+    now = _now_local()
+    today = now.date()
+    changed = False
+    for act in activities:
+        if act.status != activity_schema.ActivityStatusEnum.planned:
+            continue
+
+        if act.date < today:
+            act.status = activity_schema.ActivityStatusEnum.ongoing
+            changed = True
+        elif act.date == today:
+            if act.start_time is None or act.start_time <= now.time():
+                act.status = activity_schema.ActivityStatusEnum.ongoing
+                changed = True
+
+    if changed:
+        db.commit()
+
     return crud_activity.convert_activities_to_out(activities)
