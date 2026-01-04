@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.models.user import User
+from app.models.family_role import FamilyRole
 from app.schemas.user import RoleEnum, GenderEnum, FamilyCategoryEnum
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal, Base, engine
@@ -8,12 +10,83 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _get_table_columns(conn, table_name: str) -> set[str]:
+    dialect = conn.dialect.name
+    if dialect == "sqlite":
+        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
+        return {r.get("name") for r in rows if r.get("name")}
+
+    if dialect in {"postgresql", "postgres"}:
+        rows = conn.execute(
+            text(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = :table_name
+                """
+            ),
+            {"table_name": table_name},
+        ).all()
+        return {r[0] for r in rows if r and r[0]}
+
+    return set()
+
+
+def _ensure_family_activities_date_range_columns() -> None:
+    table = "family_activities"
+    with engine.begin() as conn:
+        existing = _get_table_columns(conn, table)
+
+        dialect = conn.dialect.name
+        if "start_date" not in existing:
+            if dialect in {"postgresql", "postgres"}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS start_date DATE"))
+            else:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN start_date DATE"))
+
+        if "end_date" not in existing:
+            if dialect in {"postgresql", "postgres"}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS end_date DATE"))
+            else:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN end_date DATE"))
+
+        conn.execute(text(f"UPDATE {table} SET start_date = \"date\" WHERE start_date IS NULL"))
+        conn.execute(text(f"UPDATE {table} SET end_date = \"date\" WHERE end_date IS NULL"))
+
+
+def _ensure_users_name_and_role_columns() -> None:
+    table = "users"
+    with engine.begin() as conn:
+        existing = _get_table_columns(conn, table)
+
+        dialect = conn.dialect.name
+        columns_to_add: list[tuple[str, str]] = [
+            ("first_name", "VARCHAR"),
+            ("last_name", "VARCHAR"),
+            ("deliverance_name", "VARCHAR"),
+            ("family_role_id", "INTEGER"),
+        ]
+
+        for col_name, col_type in columns_to_add:
+            if col_name in existing:
+                continue
+
+            if dialect in {"postgresql", "postgres"}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            else:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+
 def init_db():
     # Initialize timestamp middleware
     init_timestamp_middleware()
     
     # Create tables
     Base.metadata.create_all(bind=engine)
+
+    _ensure_family_activities_date_range_columns()
+    _ensure_users_name_and_role_columns()
 
     db: Session = SessionLocal()
 
@@ -51,6 +124,21 @@ def init_db():
         logger.info("Default church pastor user created.")
     else:
         logger.info("Church pastor user already exists.")
+
+    db.commit()
+
+    default_family_roles: list[tuple[str, RoleEnum]] = [
+        ("Pere", RoleEnum.pere),
+        ("Mere", RoleEnum.mere),
+        ("Youth Leader", RoleEnum.other),
+        ("Pastor", RoleEnum.church_pastor),
+        ("Admin", RoleEnum.admin),
+    ]
+
+    for name, system_role in default_family_roles:
+        existing_role = db.query(FamilyRole).filter(FamilyRole.name == name).first()
+        if not existing_role:
+            db.add(FamilyRole(name=name, system_role=system_role))
 
     db.commit()
     db.close()

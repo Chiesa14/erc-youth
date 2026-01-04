@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from sqlalchemy.orm import Session, joinedload
-from typing import Optional
+from typing import Optional, Literal
 from datetime import date, datetime, time
 from app.api.routes.family_member import require_parent
 from app.db.session import get_db
@@ -23,47 +23,79 @@ from app.utils.timestamps import (
 
 router = APIRouter(tags=["Activities"])
 
-def _today_local() -> date:
-    return datetime.now().date()
+
+def _coalesced_start_date_col():
+    return func.coalesce(Activity.start_date, Activity.date)
 
 
-def _now_local() -> datetime:
-    return datetime.now()
+def _coalesced_end_date_col():
+    return func.coalesce(Activity.end_date, Activity.date)
 
-def _compute_status_for_create(
-    activity_date: date,
-    start_time: Optional[time],
-) -> activity_schema.ActivityStatusEnum:
-    today = _today_local()
-    now = _now_local()
 
-    if activity_date > today:
-        return activity_schema.ActivityStatusEnum.planned
-    if activity_date < today:
-        return activity_schema.ActivityStatusEnum.ongoing
-
-    if start_time and start_time > now.time():
-        return activity_schema.ActivityStatusEnum.planned
-    return activity_schema.ActivityStatusEnum.ongoing
-
-def _validate_status_transition(
+def _normalize_activity_dates(
     *,
-    current_status: activity_schema.ActivityStatusEnum,
-    new_status: activity_schema.ActivityStatusEnum,
-) -> bool:
-    if current_status == new_status:
-        return True
-    if current_status == activity_schema.ActivityStatusEnum.planned:
-        return new_status in [
-            activity_schema.ActivityStatusEnum.ongoing,
-            activity_schema.ActivityStatusEnum.cancelled,
-        ]
-    if current_status == activity_schema.ActivityStatusEnum.ongoing:
-        return new_status in [
-            activity_schema.ActivityStatusEnum.completed,
-            activity_schema.ActivityStatusEnum.cancelled,
-        ]
-    return False
+    date_value: Optional[date],
+    start_date: Optional[date],
+    end_date: Optional[date],
+) -> tuple[date, date, date]:
+    if start_date is not None or end_date is not None:
+        if start_date is None:
+            raise HTTPException(status_code=400, detail="start_date is required when providing an end_date")
+        normalized_end = end_date or start_date
+        if normalized_end < start_date:
+            raise HTTPException(status_code=400, detail="end_date cannot be before start_date")
+        legacy_date = start_date
+        return start_date, normalized_end, legacy_date
+
+    if date_value is None:
+        raise HTTPException(status_code=400, detail="Either date or start_date must be provided")
+
+    return date_value, date_value, date_value
+
+
+def _activity_start_datetime(activity_date: date, start_time: Optional[time]) -> datetime:
+    return datetime.combine(activity_date, start_time or time(0, 0))
+
+
+def _activity_end_datetime(activity_date: date, end_time: Optional[time]) -> datetime:
+    return datetime.combine(activity_date, end_time or time(23, 59, 59))
+
+
+def _compute_initial_status(
+    start_date: date,
+    end_date: date,
+    start_time: Optional[time],
+    end_time: Optional[time],
+) -> activity_schema.ActivityStatusEnum:
+    now = datetime.now()
+    start_dt = _activity_start_datetime(start_date, start_time)
+    end_dt = _activity_end_datetime(end_date, end_time)
+
+    if now > end_dt:
+        raise HTTPException(status_code=400, detail="Cannot create an activity whose end time is in the past.")
+
+    return (
+        activity_schema.ActivityStatusEnum.planned
+        if now < start_dt
+        else activity_schema.ActivityStatusEnum.ongoing
+    )
+
+
+def _maybe_promote_planned_to_ongoing(db: Session, activities: list[Activity]) -> None:
+    now = datetime.now()
+    changed = False
+    for a in activities:
+        if a.status == activity_schema.ActivityStatusEnum.planned:
+            activity_start = a.start_date or a.date
+            if now >= _activity_start_datetime(activity_start, a.start_time):
+                a.status = activity_schema.ActivityStatusEnum.ongoing
+                changed = True
+
+    if changed:
+        db.commit()
+        for a in activities:
+            db.refresh(a)
+
 
 def require_pastor_or_parent(current_user: User):
     """Helper function to check if user is pastor or parent"""
@@ -73,6 +105,7 @@ def require_pastor_or_parent(current_user: User):
             detail="Only pastors and parents can access this resource"
         )
 
+
 # POST route - create activity
 @router.post("/", response_model=activity_schema.ActivityOut, status_code=status.HTTP_201_CREATED)
 def create_activity(
@@ -81,12 +114,16 @@ def create_activity(
         current_user: User = Depends(get_current_active_user),
 ):
     require_parent(current_user)
-    today = _today_local()
-    if activity.date < today:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot create an activity in the past.",
-        )
+    today = date.today()
+
+    start_date, end_date, legacy_date = _normalize_activity_dates(
+        date_value=activity.date,
+        start_date=activity.start_date,
+        end_date=activity.end_date,
+    )
+
+    if start_date < today:
+        raise HTTPException(status_code=400, detail="Cannot create an activity in the past.")
 
     if not activity.family_id:
         if not current_user.family_id:
@@ -95,8 +132,14 @@ def create_activity(
     else:
         activity_data = activity
 
-    enforced_status = _compute_status_for_create(activity_data.date, activity_data.start_time)
-    activity_data = activity_data.model_copy(update={"status": enforced_status})
+    activity_data = activity_data.model_copy(
+        update={
+            "date": legacy_date,
+            "start_date": start_date,
+            "end_date": end_date,
+            "status": _compute_initial_status(start_date, end_date, activity_data.start_time, activity_data.end_time)
+        }
+    )
     return crud_activity.create_activity(db, activity_data)
 
 
@@ -140,14 +183,16 @@ def read_all_activities(
             raise HTTPException(status_code=400, detail="User is not assigned to a family.")
         query = query.filter(Activity.family_id == current_user.family_id)
 
-    # Apply date filters
+    # Apply date filters (overlap semantics for ranges)
+    start_col = _coalesced_start_date_col()
+    end_col = _coalesced_end_date_col()
     if activity_date:
-        query = query.filter(Activity.date == activity_date)
+        query = query.filter(and_(start_col <= activity_date, end_col >= activity_date))
     else:
         if date_from:
-            query = query.filter(Activity.date >= date_from)
+            query = query.filter(end_col >= date_from)
         if date_to:
-            query = query.filter(Activity.date <= date_to)
+            query = query.filter(start_col <= date_to)
 
     # Apply status filter
     if status:
@@ -166,30 +211,20 @@ def read_all_activities(
     # Apply sorting
     if sort_by:
         if sort_by == "date":
-            query = query.order_by(Activity.date.asc() if sort_order == "asc" else Activity.date.desc())
+            query = query.order_by(start_col.asc() if sort_order == "asc" else start_col.desc())
         elif sort_by == "family_id":
             query = query.order_by(Activity.family_id.asc() if sort_order == "asc" else Activity.family_id.desc())
         else:
             query = apply_timestamp_sorting(query, Activity, sort_by, sort_order)
     else:
-        query = query.order_by(Activity.date.desc(), Activity.family_id.asc())
+        query = query.order_by(start_col.desc(), Activity.family_id.asc())
 
     # Apply pagination
     query = query.offset(skip).limit(limit)
 
-    # Get activities
+    # Get activities and convert to Pydantic models
     activities = query.all()
-
-    # Auto-advance planned activities to ongoing when their date arrives
-    today = _today_local()
-    changed = False
-    for act in activities:
-        if act.status == activity_schema.ActivityStatusEnum.planned and act.date <= today:
-            act.status = activity_schema.ActivityStatusEnum.ongoing
-            changed = True
-    if changed:
-        db.commit()
-
+    _maybe_promote_planned_to_ongoing(db, activities)
     return crud_activity.convert_activities_to_out(activities)
 
 
@@ -235,7 +270,8 @@ def get_activity_statistics(
     }
 
     for activity in activities:
-        activity_date = activity.date
+        activity_start = activity.start_date or activity.date
+        activity_end = activity.end_date or activity.date
 
         # Count by status
         stats["by_status"][activity.status] += 1
@@ -247,16 +283,16 @@ def get_activity_statistics(
         family_name = activity.family.name if activity.family else "Unknown"
         stats["by_family"][family_name] += 1
 
-        # This week activities
-        if week_start <= activity_date <= week_end:
+        # This week activities (overlap semantics)
+        if activity_end >= week_start and activity_start <= week_end:
             stats["this_week"] += 1
 
         # Upcoming activities
-        if activity_date > today:
+        if activity_start > today:
             stats["upcoming"] += 1
 
         # Overdue activities
-        if activity_date < today and activity.status in ["Planned", "Ongoing"]:
+        if activity_end < today and activity.status in ["Planned", "Ongoing"]:
             stats["overdue"] += 1
 
     # Convert defaultdicts to regular dicts
@@ -274,6 +310,7 @@ def get_activity_type_status_summary(
         family_id: Optional[int] = Query(None),
         date_from: Optional[date] = Query(None),
         date_to: Optional[date] = Query(None),
+        date_field: Literal["activity_date", "created_at", "updated_at"] = Query("activity_date"),
 ):
     require_pastor_or_parent(current_user)
 
@@ -291,10 +328,23 @@ def get_activity_type_status_summary(
             raise HTTPException(status_code=400, detail="User is not assigned to a family.")
         query = query.filter(Activity.family_id == current_user.family_id)
 
-    if date_from:
-        query = query.filter(Activity.date >= date_from)
-    if date_to:
-        query = query.filter(Activity.date <= date_to)
+    if date_field == "activity_date":
+        if date_from:
+            query = query.filter(_coalesced_end_date_col() >= date_from)
+        if date_to:
+            query = query.filter(_coalesced_start_date_col() <= date_to)
+    elif date_field == "created_at":
+        created_date_col = func.date(Activity.created_at)
+        if date_from:
+            query = query.filter(created_date_col >= date_from)
+        if date_to:
+            query = query.filter(created_date_col <= date_to)
+    else:  # updated_at
+        updated_date_col = func.date(Activity.updated_at)
+        if date_from:
+            query = query.filter(updated_date_col >= date_from)
+        if date_to:
+            query = query.filter(updated_date_col <= date_to)
 
     query = query.group_by(Activity.type, Activity.status)
 
@@ -368,14 +418,16 @@ def read_activities_for_family(
     # Build base query with joinedload to include family name
     query = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.family_id == family_id)
 
-    # Apply date filters
+    # Apply date filters (overlap semantics for ranges)
+    start_col = _coalesced_start_date_col()
+    end_col = _coalesced_end_date_col()
     if activity_date:
-        query = query.filter(Activity.date == activity_date)
+        query = query.filter(and_(start_col <= activity_date, end_col >= activity_date))
     else:
         if date_from:
-            query = query.filter(Activity.date >= date_from)
+            query = query.filter(end_col >= date_from)
         if date_to:
-            query = query.filter(Activity.date <= date_to)
+            query = query.filter(start_col <= date_to)
 
     # Apply timestamp filters
     has_timestamp_filters = any([created_after, created_before, updated_after, updated_before])
@@ -386,35 +438,15 @@ def read_activities_for_family(
     # Apply sorting
     if sort_by:
         if sort_by == "date":
-            query = query.order_by(Activity.date.asc() if sort_order == "asc" else Activity.date.desc())
+            query = query.order_by(start_col.asc() if sort_order == "asc" else start_col.desc())
         else:
             query = apply_timestamp_sorting(query, Activity, sort_by, sort_order)
     else:
-        query = query.order_by(Activity.date.desc())
+        query = query.order_by(start_col.desc())
 
-    # Get activities
+    # Get activities and convert to Pydantic models
     activities = query.all()
-
-    # Auto-advance planned activities to ongoing when their date arrives.
-    # If an activity has a start_time, only advance once that start_time is reached.
-    now = _now_local()
-    today = now.date()
-    changed = False
-    for act in activities:
-        if act.status != activity_schema.ActivityStatusEnum.planned:
-            continue
-
-        if act.date < today:
-            act.status = activity_schema.ActivityStatusEnum.ongoing
-            changed = True
-        elif act.date == today:
-            if act.start_time is None or act.start_time <= now.time():
-                act.status = activity_schema.ActivityStatusEnum.ongoing
-                changed = True
-
-    if changed:
-        db.commit()
-
+    _maybe_promote_planned_to_ongoing(db, activities)
     return crud_activity.convert_activities_to_out(activities)
 
 
@@ -428,6 +460,16 @@ def get_activity_by_id(
     activity = crud_activity.get_activity_by_id(db, activity_id)
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
+
+    if activity.status == activity_schema.ActivityStatusEnum.planned:
+        activity_start = activity.start_date or activity.date
+        if datetime.now() >= _activity_start_datetime(activity_start, activity.start_time):
+            raw = db.query(Activity).filter(Activity.id == activity_id).first()
+            if raw:
+                raw.status = activity_schema.ActivityStatusEnum.ongoing
+                db.commit()
+                db.refresh(raw)
+                activity = crud_activity.get_activity_by_id(db, activity_id)
 
     # Pastors can view any activity, parents only their family's activities
     if current_user.role == RoleEnum.church_pastor:
@@ -458,44 +500,59 @@ def update_activity(
     if current_user.family_id != activity.family_id:
         raise HTTPException(status_code=403, detail="Not authorized to update this activity")
 
-    now = _now_local()
-    today = now.date()
-    incoming = updated_data.dict(exclude_unset=True)
+    update_payload = updated_data.dict(exclude_unset=True)
 
-    effective_date = incoming.get("date", activity.date)
-    effective_status = incoming.get("status", activity.status)
+    if "date" in update_payload and update_payload["date"] is not None and update_payload["date"] < date.today():
+        raise HTTPException(status_code=400, detail="Cannot set activity date in the past.")
+    if "start_date" in update_payload and update_payload["start_date"] is not None and update_payload["start_date"] < date.today():
+        raise HTTPException(status_code=400, detail="Cannot set activity start_date in the past.")
 
-    if "date" in incoming and incoming["date"] is not None:
-        if incoming["date"] < today:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot set activity date in the past.",
-            )
-
-    if "status" in incoming and incoming["status"] is not None:
-        new_status = incoming["status"]
-        if not _validate_status_transition(current_status=activity.status, new_status=new_status):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid status transition.",
-            )
-
-    if effective_date > today and effective_status != activity_schema.ActivityStatusEnum.planned:
-        raise HTTPException(
-            status_code=400,
-            detail="Future activities can only be Planned.",
+    if any(k in update_payload for k in ["date", "start_date", "end_date"]):
+        start_date, end_date, legacy_date = _normalize_activity_dates(
+            date_value=update_payload.get("date", activity.date),
+            start_date=update_payload.get("start_date", activity.start_date),
+            end_date=update_payload.get("end_date", activity.end_date),
         )
+        update_payload["date"] = legacy_date
+        update_payload["start_date"] = start_date
+        update_payload["end_date"] = end_date
 
-    for field, value in incoming.items():
+    if "status" in update_payload:
+        current_status = activity.status
+        new_status = update_payload["status"]
+
+        if current_status == activity_schema.ActivityStatusEnum.completed:
+            raise HTTPException(status_code=400, detail="Completed activities cannot be modified.")
+
+        if current_status == activity_schema.ActivityStatusEnum.cancelled:
+            raise HTTPException(status_code=400, detail="Cancelled activities cannot be modified.")
+
+        allowed_next = {
+            activity_schema.ActivityStatusEnum.planned: {
+                activity_schema.ActivityStatusEnum.ongoing,
+                activity_schema.ActivityStatusEnum.cancelled,
+                activity_schema.ActivityStatusEnum.planned,
+            },
+            activity_schema.ActivityStatusEnum.ongoing: {
+                activity_schema.ActivityStatusEnum.completed,
+                activity_schema.ActivityStatusEnum.cancelled,
+                activity_schema.ActivityStatusEnum.ongoing,
+            },
+        }
+
+        if new_status not in allowed_next.get(current_status, set()):
+            raise HTTPException(status_code=400, detail="Invalid status transition.")
+
+        if new_status == activity_schema.ActivityStatusEnum.completed and current_status != activity_schema.ActivityStatusEnum.ongoing:
+            raise HTTPException(status_code=400, detail="Only ongoing activities can be marked completed.")
+
+    for field, value in update_payload.items():
         setattr(activity, field, value)
 
-    # Ensure planned activities are not kept as planned once the date/time is reached
     if activity.status == activity_schema.ActivityStatusEnum.planned:
-        if activity.date < today:
+        activity_start = activity.start_date or activity.date
+        if datetime.now() >= _activity_start_datetime(activity_start, activity.start_time):
             activity.status = activity_schema.ActivityStatusEnum.ongoing
-        elif activity.date == today:
-            if activity.start_time is None or activity.start_time <= now.time():
-                activity.status = activity_schema.ActivityStatusEnum.ongoing
 
     # updated_at will be automatically set by the middleware
     db.commit()
@@ -504,13 +561,8 @@ def update_activity(
     # Refresh check-in window if date/time changed.
     crud_checkin.upsert_checkin_session(db, activity)
 
-    # Convert to Pydantic model with family_name populated
-    activity_dict = {
-        **activity.__dict__,
-        'family_name': activity.family.name if activity.family else "Unknown"
-    }
-
-    return activity_schema.ActivityOut(**activity_dict)
+    # Convert to Pydantic model using the existing helper function
+    return crud_activity.convert_activities_to_out([activity])[0]
 
 
 @router.get("/{activity_id}/checkin-session", response_model=ActivityCheckinSessionOut)
@@ -640,29 +692,9 @@ def read_recent_activities_for_family(
     query = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.family_id == family_id)
 
     # Order by date descending and limit to 4
-    query = query.order_by(Activity.date.desc()).limit(4)
+    query = query.order_by(_coalesced_start_date_col().desc()).limit(4)
 
-    # Get activities
+    # Get activities and convert to Pydantic models
     activities = query.all()
-
-    # Auto-advance planned activities to ongoing when their date arrives.
-    # If an activity has a start_time, only advance once that start_time is reached.
-    now = _now_local()
-    today = now.date()
-    changed = False
-    for act in activities:
-        if act.status != activity_schema.ActivityStatusEnum.planned:
-            continue
-
-        if act.date < today:
-            act.status = activity_schema.ActivityStatusEnum.ongoing
-            changed = True
-        elif act.date == today:
-            if act.start_time is None or act.start_time <= now.time():
-                act.status = activity_schema.ActivityStatusEnum.ongoing
-                changed = True
-
-    if changed:
-        db.commit()
-
+    _maybe_promote_planned_to_ongoing(db, activities)
     return crud_activity.convert_activities_to_out(activities)

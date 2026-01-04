@@ -209,10 +209,18 @@ class DashboardController:
         
         for month_info in months:
             # Calculate program implementation for this month
+            month_start = date(month_info['year'], month_info['month'], 1)
+            month_end = date(
+                month_info['year'],
+                month_info['month'],
+                calendar.monthrange(month_info['year'], month_info['month'])[1],
+            )
+            start_col = func.coalesce(Activity.start_date, Activity.date)
+            end_col = func.coalesce(Activity.end_date, Activity.date)
             monthly_activities = self.db.query(Activity).filter(
                 and_(
-                    extract('year', Activity.date) == month_info['year'],
-                    extract('month', Activity.date) == month_info['month']
+                    end_col >= month_start,
+                    start_col <= month_end,
                 )
             ).all()
             
@@ -518,7 +526,7 @@ class DashboardController:
         
         weekly_events = len([
             activity for activity in family_activities
-            if activity.date and week_start <= activity.date.date() <= week_end
+            if (activity.end_date or activity.date) >= week_start and (activity.start_date or activity.date) <= week_end
         ])
         
         # Calculate engagement based on completed activities
@@ -558,11 +566,16 @@ class DashboardController:
             month_key = month_date.strftime('%Y-%m')
             
             # Count spiritual and social activities for this month
+            month_start = date(month_date.year, month_date.month, 1)
+            month_end = date(
+                month_date.year,
+                month_date.month,
+                calendar.monthrange(month_date.year, month_date.month)[1],
+            )
             month_activities = [
                 activity for activity in family_activities
-                if activity.date and
-                activity.date.year == month_date.year and
-                activity.date.month == month_date.month
+                if (activity.end_date or activity.date) >= month_start
+                and (activity.start_date or activity.date) <= month_end
             ]
             
             # Categorize activities based on description keywords
@@ -623,8 +636,8 @@ class DashboardController:
         # Count upcoming events (activities in next 30 days)
         upcoming_events = self.db.query(Activity).filter(
             and_(
-                Activity.date >= now.date(),
-                Activity.date <= (now + timedelta(days=30)).date(),
+                func.coalesce(Activity.end_date, Activity.date) >= now.date(),
+                func.coalesce(Activity.start_date, Activity.date) <= (now + timedelta(days=30)).date(),
                 Activity.status.in_(['planned', 'ongoing'])
             )
         ).count()
@@ -672,8 +685,9 @@ class DashboardController:
         total_youth = self.db.query(FamilyMember).count()
         total_activities_this_month = self.db.query(Activity).filter(
             and_(
-                extract('year', Activity.date) == now.year,
-                extract('month', Activity.date) == now.month
+                func.coalesce(Activity.end_date, Activity.date) >= date(now.year, now.month, 1),
+                func.coalesce(Activity.start_date, Activity.date)
+                <= date(now.year, now.month, calendar.monthrange(now.year, now.month)[1]),
             )
         ).count()
         
@@ -717,7 +731,7 @@ class DashboardController:
         ).limit(4).all()
         
         recent_activities_detailed = self.db.query(Activity).filter(
-            Activity.date >= now.date() - timedelta(days=7)
+            func.coalesce(Activity.end_date, Activity.date) >= now.date() - timedelta(days=7)
         ).order_by(Activity.created_at.desc()).limit(2).all()
         
         recent_updates = []
@@ -771,7 +785,7 @@ class DashboardController:
 
             recent_updates.append(YouthUpdate(
                 id=activity.id + 1000,  # Offset to avoid ID conflicts
-                title=f"{activity.description} - {activity.date.strftime('%A')}",
+                title=f"{activity.description} - {(activity.start_date or activity.date).strftime('%A')}",
                 time=time_str,
                 type="event",
                 urgent=activity.status.value == "planned",

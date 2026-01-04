@@ -27,7 +27,7 @@ def create_user(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.role != "admin":
+    if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Only admins can create users.")
 
     db_user = crud_user.get_user_by_email(db, email=user.email)
@@ -111,7 +111,7 @@ def admin_update_user_password(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_active_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Only admins can update passwords.")
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -128,7 +128,7 @@ def admin_reset_user_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Only admins can reset passwords.")
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -203,7 +203,7 @@ def delete_user_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Only admins can delete users.")
 
     try:
@@ -220,7 +220,7 @@ def admin_update_user_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if current_user.role != "admin":
+    if current_user.role != RoleEnum.admin:
         raise HTTPException(status_code=403, detail="Only admins can update user details.")
 
     try:

@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel, computed_field
-from datetime import date, time
+from datetime import date as Date, time
 from typing import Optional
 from app.utils.timestamps import TimestampMixin
 
@@ -31,7 +31,9 @@ class ActivityStatusEnum(str, Enum):
 
 class ActivityBase(BaseModel):
     family_id: int
-    date: date
+    date: Date
+    start_date: Optional[Date] = None
+    end_date: Optional[Date] = None
     start_time: Optional[time] = None
     end_time: Optional[time] = None
     status: ActivityStatusEnum
@@ -40,23 +42,27 @@ class ActivityBase(BaseModel):
     description: Optional[str] = None
 
 class ActivityCreate(BaseModel):
-    date: date
+    date: Optional[Date] = None
+    start_date: Optional[Date] = None
+    end_date: Optional[Date] = None
     start_time: Optional[time] = None
     end_time: Optional[time] = None
-    status: Optional[ActivityStatusEnum] = None  # Server enforces based on date/time
+    status: Optional[ActivityStatusEnum] = None
     category: ActivityCategoryEnum
     type: str                   # Example: 'Prayer calendar', 'Illness', etc.
-    description: Optional[str]
+    description: Optional[str] = None
     family_id: Optional[int] = None
 
 class ActivityUpdate(BaseModel):
-    date: Optional[date]
-    start_time: Optional[time]
-    end_time: Optional[time]
-    status: Optional[ActivityStatusEnum]
-    category: Optional[ActivityCategoryEnum]
-    type: Optional[str]
-    description: Optional[str]
+    date: Optional[Date] = None
+    start_date: Optional[Date] = None
+    end_date: Optional[Date] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    status: Optional[ActivityStatusEnum] = None
+    category: Optional[ActivityCategoryEnum] = None
+    type: Optional[str] = None
+    description: Optional[str] = None
 
 class ActivityOut(ActivityBase, TimestampMixin):
     id: int

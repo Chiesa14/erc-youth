@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # URL Configuration with fallbacks
     ENVIRONMENT: str = "development"
-    FRONTEND_URL: str = "http://localhost:8080"
+    FRONTEND_URL: str = "http://127.0.0.1:8080"
     BACKEND_URL: str = "http://localhost:8000"
     WEBSOCKET_URL: str = "ws://localhost:8000"
     

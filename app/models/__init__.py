@@ -6,6 +6,7 @@ from .family_activity_checkin import ActivityCheckinSession, ActivityAttendance
 from .recommendation import Program, Comment
 from .feedback import Feedback, Reply
 from .system_log import SystemLog
+from .family_role import FamilyRole
 
 Family.activities = relationship("Activity", back_populates="family", cascade="all, delete")
 Activity.family = relationship("Family", back_populates="activities")

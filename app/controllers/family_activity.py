@@ -5,6 +5,29 @@ from app.schemas.family_activity import ActivityCreate, ActivityOut
 from app.utils.logging_decorator import log_create, log_view
 
 
+def _activity_to_dict(activity: Activity) -> dict:
+    """
+    Helper function to convert SQLAlchemy Activity model to a dictionary
+    that can be used to create a Pydantic model, avoiding SQLAlchemy internal attributes.
+    """
+    return {
+        'id': activity.id,
+        'family_id': activity.family_id,
+        'family_name': activity.family.name if activity.family else "Unknown",
+        'date': activity.date,
+        'start_date': activity.start_date,
+        'end_date': activity.end_date,
+        'start_time': activity.start_time,
+        'end_time': activity.end_time,
+        'status': activity.status,
+        'category': activity.category,
+        'type': activity.type,
+        'description': activity.description,
+        'created_at': activity.created_at,
+        'updated_at': activity.updated_at,
+    }
+
+
 @log_create("family_activities", "Created new family activity")
 def create_activity(db: Session, activity: ActivityCreate):
     db_activity = Activity(**activity.dict())
@@ -22,28 +45,14 @@ def create_activity(db: Session, activity: ActivityCreate):
         Activity.id == db_activity.id).first()
 
     # Convert to Pydantic model with family_name populated
-    activity_dict = {
-        **activity_with_family.__dict__,
-        'family_name': activity_with_family.family.name if activity_with_family.family else "Unknown"
-    }
-
+    activity_dict = _activity_to_dict(activity_with_family)
     return ActivityOut(**activity_dict)
 
 
 @log_view("family_activities", "Viewed family activities")
 def get_activities_by_family(db: Session, family_id: int) -> List[ActivityOut]:
     activities = db.query(Activity).options(joinedload(Activity.family)).filter(Activity.family_id == family_id).all()
-
-    # Convert to Pydantic models with family_name populated
-    result = []
-    for activity in activities:
-        activity_dict = {
-            **activity.__dict__,
-            'family_name': activity.family.name if activity.family else "Unknown"
-        }
-        result.append(ActivityOut(**activity_dict))
-
-    return result
+    return convert_activities_to_out(activities)
 
 
 @log_view("family_activities", "Viewed activity details")
@@ -54,11 +63,7 @@ def get_activity_by_id(db: Session, activity_id: int) -> ActivityOut | None:
         return None
 
     # Convert to Pydantic model with family_name populated
-    activity_dict = {
-        **activity.__dict__,
-        'family_name': activity.family.name if activity.family else "Unknown"
-    }
-
+    activity_dict = _activity_to_dict(activity)
     return ActivityOut(**activity_dict)
 
 
@@ -66,10 +71,7 @@ def convert_activities_to_out(activities: List[Activity]) -> List[ActivityOut]:
     """Helper function to convert SQLAlchemy models to Pydantic models with family_name"""
     result = []
     for activity in activities:
-        activity_dict = {
-            **activity.__dict__,
-            'family_name': activity.family.name if activity.family else "Unknown"
-        }
+        activity_dict = _activity_to_dict(activity)
         result.append(ActivityOut(**activity_dict))
-
+    
     return result

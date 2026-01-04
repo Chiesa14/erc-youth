@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.controllers import family_member as crud_member
@@ -308,22 +309,25 @@ def get_family_stats(family_id: int, db: Session = Depends(get_db)):
         FamilyMember.year_of_graduation < current_year
     ).count()
 
+    start_col = func.coalesce(Activity.start_date, Activity.date)
+    end_col = func.coalesce(Activity.end_date, Activity.date)
+
     active_events_count = db.query(Activity).filter(
         Activity.family_id == family_id,
-        Activity.date >= today
+        end_col >= today
     ).count()
 
     start_of_week = today - timedelta(days=today.weekday())
     end_of_week = start_of_week + timedelta(days=6)
     weekly_events_count = db.query(Activity).filter(
         Activity.family_id == family_id,
-        Activity.date.between(start_of_week, end_of_week)
+        and_(end_col >= start_of_week, start_col <= end_of_week)
     ).count()
 
     thirty_days_ago = today - timedelta(days=30)
     engagement_count = db.query(Activity).filter(
         Activity.family_id == family_id,
-        Activity.date >= thirty_days_ago
+        end_col >= thirty_days_ago
     ).count()
 
     # --- New: Age Distribution Calculation ---
@@ -371,12 +375,12 @@ def get_family_stats(family_id: int, db: Session = Depends(get_db)):
 
     activities = db.query(Activity).filter(
         Activity.family_id == family_id,
-        Activity.date >= six_months_ago_date.replace(day=1),
+        end_col >= six_months_ago_date.replace(day=1),
         Activity.category.in_([ActivityCategoryEnum.spiritual, ActivityCategoryEnum.social])
     ).all()
 
     for act in activities:
-        month_key = act.date.strftime("%Y-%m")
+        month_key = (act.start_date or act.date).strftime("%Y-%m")
         if month_key in trends:
             if act.category == ActivityCategoryEnum.spiritual:
                 trends[month_key]["spiritual"] += 1

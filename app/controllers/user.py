@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Any
 
 from app.models.family import Family
+from app.models.family_role import FamilyRole
 from app.models.user import User
 from app.schemas.user import UserCreate, RoleEnum, UserUpdate, AdminUserUpdate
 from app.schemas.user import FamilyCategoryEnum
@@ -10,6 +11,15 @@ from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
 from app.utils.logging_decorator import log_create, log_update, log_delete
 from datetime import datetime
 from app.models.user_invitation import UserInvitation
+
+
+def _build_full_name(first_name: str | None, last_name: str | None) -> str:
+    parts = []
+    if first_name and first_name.strip():
+        parts.append(first_name.strip())
+    if last_name and last_name.strip():
+        parts.append(last_name.strip())
+    return " ".join(parts).strip()
 
 def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email).first()
@@ -52,18 +62,38 @@ def create_user(db: Session, user: UserCreate):
         except Exception:
             family_category = None
 
+    family_role: FamilyRole | None = None
+    if user.family_role_id is not None:
+        family_role = db.query(FamilyRole).filter(FamilyRole.id == user.family_role_id).first()
+        if not family_role:
+            raise ValueError("Family role not found")
+
+    resolved_role = user.role
+    if resolved_role is None and family_role is not None:
+        resolved_role = family_role.system_role
+    if resolved_role is None:
+        resolved_role = RoleEnum.other
+
+    resolved_full_name = (user.full_name or "").strip()
+    if not resolved_full_name:
+        resolved_full_name = _build_full_name(user.first_name, user.last_name)
+
     db_user = User(
-        full_name=user.full_name,
+        full_name=resolved_full_name,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        deliverance_name=user.deliverance_name,
         email=user.email,
         hashed_password=hashed_pw,
         gender=user.gender,
         phone=user.phone,
         family_category=family_category,
         family_name=family_name,
-        role=user.role,
+        role=resolved_role,
         other=user.other,
         profile_pic=user.profile_pic,
-        family_id=family_id
+        family_id=family_id,
+        family_role_id=user.family_role_id,
     )
 
     db.add(db_user)
@@ -168,11 +198,28 @@ def admin_update_user(db: Session, user_id: int, updates: AdminUserUpdate) -> ty
         raise ValueError("User not found")
 
     # Update only provided fields
-    for field, value in updates.dict(exclude_unset=True).items():
+    incoming = updates.model_dump(exclude_unset=True)
+    for field, value in incoming.items():
         setattr(db_user, field, value)
 
+    # If family_role_id changed and role wasn't explicitly provided, map it to system role
+    if "family_role_id" in incoming and "role" not in incoming:
+        if updates.family_role_id is None:
+            db_user.family_role_id = None
+        else:
+            family_role = db.query(FamilyRole).filter(FamilyRole.id == updates.family_role_id).first()
+            if not family_role:
+                raise ValueError("Family role not found")
+            db_user.role = family_role.system_role
+
+    # If first/last name changed but full_name wasn't explicitly provided, rebuild full_name
+    if ("first_name" in incoming or "last_name" in incoming) and "full_name" not in incoming:
+        rebuilt = _build_full_name(db_user.first_name, db_user.last_name)
+        if rebuilt:
+            db_user.full_name = rebuilt
+
     # Handle family relation via family_id (explicit link; no implicit creation)
-    if 'family_id' in updates.dict(exclude_unset=True):
+    if 'family_id' in incoming:
         if updates.family_id is None:
             db_user.family_id = None
             db_user.family_name = None

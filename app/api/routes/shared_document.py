@@ -1,6 +1,5 @@
-from operator import or_
-
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 

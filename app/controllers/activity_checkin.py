@@ -28,8 +28,11 @@ def compute_checkin_window(activity: Activity) -> tuple[datetime, datetime]:
     else:
         end_t = time(23, 59, 59)
 
-    opens_at = datetime.combine(activity.date, start_t, tzinfo=timezone.utc)
-    closes_at = datetime.combine(activity.date, end_t, tzinfo=timezone.utc)
+    start_d = activity.start_date or activity.date
+    end_d = activity.end_date or activity.date
+
+    opens_at = datetime.combine(start_d, start_t, tzinfo=timezone.utc)
+    closes_at = datetime.combine(end_d, end_t, tzinfo=timezone.utc)
 
     if closes_at < opens_at:
         closes_at = closes_at + timedelta(days=1)

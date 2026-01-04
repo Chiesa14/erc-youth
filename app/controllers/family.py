@@ -17,7 +17,10 @@ from app.utils.logging_decorator import log_create, log_update, log_delete, log_
 @log_view("families", "Viewed all families")
 def get_all_families(db: Session) -> List[FamilyResponse]:
     last_activity_subquery = (
-        db.query(Activity.family_id, func.max(Activity.date).label("last_activity_date"))
+        db.query(
+            Activity.family_id,
+            func.max(func.coalesce(Activity.end_date, Activity.date)).label("last_activity_date"),
+        )
         .group_by(Activity.family_id)
         .subquery()
     )
@@ -58,7 +61,7 @@ def get_all_families(db: Session) -> List[FamilyResponse]:
         activities = [
             ActivityResponse(
                 id=activity.id,
-                date=activity.date,
+                date=activity.start_date or activity.date,
                 status=activity.status,
                 category=activity.category,
                 type=activity.type,
@@ -93,7 +96,10 @@ def get_all_families(db: Session) -> List[FamilyResponse]:
 @log_view("families", "Viewed family details")
 def get_family_by_id(db: Session, family_id: int) -> FamilyResponse:
     last_activity_subquery = (
-        db.query(Activity.family_id, func.max(Activity.date).label("last_activity_date"))
+        db.query(
+            Activity.family_id,
+            func.max(func.coalesce(Activity.end_date, Activity.date)).label("last_activity_date"),
+        )
         .group_by(Activity.family_id)
         .subquery()
     )
@@ -136,7 +142,7 @@ def get_family_by_id(db: Session, family_id: int) -> FamilyResponse:
     activities = [
         ActivityResponse(
             id=activity.id,
-            date=activity.date,
+            date=activity.start_date or activity.date,
             status=activity.status,
             category=activity.category,
             type=activity.type,

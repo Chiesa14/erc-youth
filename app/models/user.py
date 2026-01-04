@@ -12,6 +12,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(String, nullable=False)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    deliverance_name = Column(String, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     gender = Column(Enum(GenderEnum), nullable=False)
@@ -31,9 +34,11 @@ class User(Base):
 
     # Foreign key relationships
     family_id = Column(Integer, ForeignKey("families.id"), nullable=True)
+    family_role_id = Column(Integer, ForeignKey("family_roles.id"), nullable=True)
 
     # Relationships with CASCADE DELETE
     family = relationship("Family", back_populates="users")
+    family_role = relationship("FamilyRole")
     announcements = relationship("Announcement", back_populates="user", cascade="all, delete-orphan")
 
     # Chat-related relationships with cascade delete

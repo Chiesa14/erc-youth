@@ -261,6 +261,9 @@ def create_user_from_member(db: Session, member_id: int, new_password: str) -> U
     # Create user from member data
     user_create = UserCreate(
         full_name=member.name,
+        first_name=None,
+        last_name=None,
+        deliverance_name=None,
         email=member.email,
         password=new_password,
         gender=member.gender,
@@ -268,6 +271,7 @@ def create_user_from_member(db: Session, member_id: int, new_password: str) -> U
         family_category=member.family.category,
         family_name=member.family.name,
         role=RoleEnum.other,
+        family_role_id=None,
         other=None,
         profile_pic=None
     )

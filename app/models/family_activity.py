@@ -11,6 +11,8 @@ class Activity(Base):
     id = Column(Integer, primary_key=True, index=True)
     family_id = Column(Integer, ForeignKey("families.id"), nullable=False)
     date = Column(Date, nullable=False)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
     start_time = Column(Time, nullable=True)
     end_time = Column(Time, nullable=True)
     status = Column(Enum(ActivityStatusEnum), nullable=False)

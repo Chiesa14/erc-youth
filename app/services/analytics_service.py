@@ -24,6 +24,14 @@ from app.schemas.analytics import (
 from app.schemas.family_activity import ActivityStatusEnum, ActivityCategoryEnum
 
 
+def _coalesced_start_date_col():
+    return func.coalesce(Activity.start_date, Activity.date)
+
+
+def _coalesced_end_date_col():
+    return func.coalesce(Activity.end_date, Activity.date)
+
+
 class AnalyticsService:
     def __init__(self, db: Session):
         self.db = db
@@ -68,8 +76,8 @@ class AnalyticsService:
         
         # Build base query filters
         date_filter = and_(
-            Activity.date >= start_date,
-            Activity.date <= end_date
+            _coalesced_end_date_col() >= start_date,
+            _coalesced_start_date_col() <= end_date
         )
         
         # Total families (filtered if family_ids provided)
@@ -185,8 +193,8 @@ class AnalyticsService:
             activities = self.db.query(Activity).filter(
                 and_(
                     Activity.family_id == family.id,
-                    Activity.date >= start_date,
-                    Activity.date <= end_date
+                    _coalesced_end_date_col() >= start_date,
+                    _coalesced_start_date_col() <= end_date
                 )
             ).all()
             
@@ -202,7 +210,7 @@ class AnalyticsService:
             hours_logged = self._estimate_hours_logged(activities)
             
             # Last active date
-            last_active = max([a.date for a in activities]) if activities else start_date
+            last_active = max([(a.end_date or a.date) for a in activities]) if activities else start_date
             
             # Calculate trend
             prev_start = start_date - (end_date - start_date)
@@ -235,8 +243,8 @@ class AnalyticsService:
         actual_activities = self.db.query(Activity).filter(
             and_(
                 Activity.family_id == family_id,
-                Activity.date >= start_date,
-                Activity.date <= end_date
+                _coalesced_end_date_col() >= start_date,
+                _coalesced_start_date_col() <= end_date
             )
         ).count()
         
@@ -253,15 +261,15 @@ class AnalyticsService:
             activities = self.db.query(Activity).filter(
                 and_(
                     Activity.family_id == family_id,
-                    Activity.date >= start_date,
-                    Activity.date <= end_date
+                    _coalesced_end_date_col() >= start_date,
+                    _coalesced_start_date_col() <= end_date
                 )
             ).all()
             
             # Check if activities are spread across different weeks
             activity_weeks = set()
             for activity in activities:
-                week_number = activity.date.isocalendar()[1]
+                week_number = (activity.start_date or activity.date).isocalendar()[1]
                 activity_weeks.add(week_number)
             
             consistency_bonus = min(len(activity_weeks) * 5, 20)  # Up to 20% bonus
@@ -275,8 +283,8 @@ class AnalyticsService:
         activities = self.db.query(Activity).filter(
             and_(
                 Activity.family_id == family_id,
-                Activity.date >= start_date,
-                Activity.date <= end_date
+                _coalesced_end_date_col() >= start_date,
+                _coalesced_start_date_col() <= end_date
             )
         ).all()
         
@@ -344,8 +352,8 @@ class AnalyticsService:
         
         # Build query filters
         date_filter = and_(
-            Activity.date >= start_date,
-            Activity.date <= end_date,
+            _coalesced_end_date_col() >= start_date,
+            _coalesced_start_date_col() <= end_date,
             Activity.type.in_(activity_types)
         )
         
@@ -459,8 +467,8 @@ class AnalyticsService:
         """Get metrics for the previous period for trend calculation"""
         
         date_filter = and_(
-            Activity.date >= start_date,
-            Activity.date <= end_date
+            _coalesced_end_date_col() >= start_date,
+            _coalesced_start_date_col() <= end_date
         )
         
         if family_ids:
