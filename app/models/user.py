@@ -41,6 +41,12 @@ class User(Base):
     family_role = relationship("FamilyRole")
     announcements = relationship("Announcement", back_populates="user", cascade="all, delete-orphan")
 
+    @property
+    def family_role_name(self):
+        if self.family_role is None:
+            return None
+        return self.family_role.name
+
     # Chat-related relationships with cascade delete
     sent_messages = relationship("Message",
                                  foreign_keys="Message.sender_id",

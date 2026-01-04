@@ -6,6 +6,7 @@ from sqlalchemy.sql import func
 from app.db.session import Base
 from app.schemas.family_member import GraduationModeEnum,AccessPermissionEnum, EducationLevelEnum
 from app.schemas.user import GenderEnum
+from app.models.bcc_class_completion import BccClassCompletion
 
 
 class FamilyMemberInvitation(Base):
@@ -66,4 +67,9 @@ class FamilyMember(Base):
     family = relationship("Family", back_populates="members")
     permissions = relationship("FamilyMemberPermission", cascade="all, delete", back_populates="member")
     invitation = relationship("FamilyMemberInvitation", back_populates="member", uselist=False, cascade="all, delete")
+    bcc_class_completions = relationship(
+        "BccClassCompletion",
+        back_populates="member",
+        cascade="all, delete",
+    )
 

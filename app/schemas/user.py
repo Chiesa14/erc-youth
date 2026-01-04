@@ -60,6 +60,7 @@ class UserOut(BaseModel, TimestampMixin):  # Now this works since TimestampMixin
     family_name: Optional[str] = None
     role: RoleEnum
     family_role_id: Optional[int] = None
+    family_role_name: Optional[str] = None
     other: Optional[str]
     biography: Optional[str]
     profile_pic: Optional[str]
