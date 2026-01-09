@@ -8,6 +8,7 @@ import calendar
 from app.models.family import Family
 from app.models.family_document import FamilyDocument
 from app.models.family_member import FamilyMember
+from app.models.bcc_class_completion import BccClassCompletion
 from app.models.family_activity import Activity
 from app.models.user import User
 from app.models.chat import UserPresence
@@ -28,6 +29,14 @@ from app.schemas.family_activity import ActivityStatusEnum
 class DashboardController:
     def __init__(self, db: Session):
         self.db = db
+
+    def _bcc_completed_members_query(self):
+        return (
+            self.db.query(FamilyMember.id.label("member_id"))
+            .join(BccClassCompletion, BccClassCompletion.member_id == FamilyMember.id)
+            .group_by(FamilyMember.id)
+            .having(func.count(func.distinct(BccClassCompletion.class_number)) >= 7)
+        )
 
     def get_church_dashboard_data(self, filters: Optional[DashboardFilters] = None) -> ChurchDashboardData:
         """
@@ -82,10 +91,8 @@ class DashboardController:
         male_ratio = round((male_count / total_with_gender * 100), 1) if total_with_gender > 0 else 0
         female_ratio = round((female_count / total_with_gender * 100), 1) if total_with_gender > 0 else 0
         
-        # BCC completion rate
-        bcc_participants = self.db.query(FamilyMember).filter(
-            FamilyMember.bcc_class_participation.is_(True)
-        ).count()
+        # BCC completion rate (completed all 7 classes)
+        bcc_participants = self._bcc_completed_members_query().count()
         bcc_completion = round((bcc_participants / total_youth * 100), 1) if total_youth > 0 else 0
         
         # Program implementation (completed activities vs total activities)
@@ -120,17 +127,19 @@ class DashboardController:
         """Get performance data by family (department)"""
         
         # Get families with their member counts and statistics
-        family_stats = self.db.query(
-            Family.name,
-            func.count(FamilyMember.id).label('youth_count'),
-            func.sum(
-                case(
-                    (FamilyMember.bcc_class_participation.is_(True), 1),
-                    else_=0
-                )
-            ).label('bcc_participants')
-        ).join(FamilyMember, Family.id == FamilyMember.family_id) \
-         .group_by(Family.id, Family.name).all()
+        completed_ids_subq = self._bcc_completed_members_query().subquery()
+
+        family_stats = (
+            self.db.query(
+                Family.name,
+                func.count(FamilyMember.id).label("youth_count"),
+                func.coalesce(func.count(completed_ids_subq.c.member_id), 0).label("bcc_participants"),
+            )
+            .join(FamilyMember, Family.id == FamilyMember.family_id)
+            .outerjoin(completed_ids_subq, completed_ids_subq.c.member_id == FamilyMember.id)
+            .group_by(Family.id, Family.name)
+            .all()
+        )
 
         # Get activity completion rates by family
         activity_stats = self.db.query(
@@ -230,12 +239,14 @@ class DashboardController:
             
             # For BCC completion, we'll use cumulative data up to this month
             # as BCC completion is more of a cumulative metric
-            bcc_participants = self.db.query(FamilyMember).filter(
-                and_(
-                    FamilyMember.bcc_class_participation.is_(True),
-                    FamilyMember.created_at <= datetime(month_info['year'], month_info['month'], 28)
-                )
-            ).count()
+            cutoff_dt = datetime(month_info['year'], month_info['month'], 28)
+
+            # Completed all 7 classes for members created up to cutoff
+            bcc_participants = (
+                self._bcc_completed_members_query()
+                .filter(FamilyMember.created_at <= cutoff_dt)
+                .count()
+            )
             
             total_members_by_month = self.db.query(FamilyMember).filter(
                 FamilyMember.created_at <= datetime(month_info['year'], month_info['month'], 28)
@@ -503,11 +514,9 @@ class DashboardController:
             member.created_at.month == now.month
         ])
         
-        # BCC graduates
-        bcc_graduate = len([
-            member for member in family_members
-            if member.bcc_class_participation
-        ])
+        # BCC graduates (completed all 7 classes)
+        completed_ids = {row.member_id for row in self._bcc_completed_members_query().all()}
+        bcc_graduate = len([m for m in family_members if m.id in completed_ids])
         
         # Get family activities
         family_activities = self.db.query(Activity).filter(

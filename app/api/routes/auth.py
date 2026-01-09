@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
 from app.core import security
 from app.core.security import get_current_user
 from app.db.session import get_db
@@ -33,6 +34,22 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     user = get_user_by_email(db, form_data.username)
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Backfill family linkage if a legacy/incorrect user record exists without family_id.
+    # We match by email, which is unique in both users and family_members.
+    if user.family_id is None:
+        member = (
+            db.query(FamilyMember)
+            .options(joinedload(FamilyMember.family))
+            .filter(FamilyMember.email == user.email)
+            .first()
+        )
+        if member and member.family_id:
+            user.family_id = member.family_id
+            if member.family is not None:
+                user.family_name = member.family.name
+                user.family_category = member.family.category
+            db.commit()
 
     # Mark the user as online for presence tracking
     _upsert_user_presence(db, user.id, is_online=True)

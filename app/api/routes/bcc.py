@@ -143,3 +143,17 @@ def get_family_status(
         is_complete=is_complete,
         incomplete_members=[BccMemberProgressOut(**m) for m in incomplete_members],
     )
+
+
+@router.get("/families/me/progress", response_model=list[BccMemberProgressOut])
+def get_my_family_progress(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not current_user.family_id:
+        raise HTTPException(status_code=400, detail="User is not assigned to any family")
+
+    # Admin/pastor can also call this, but for them it returns progress for their assigned family
+    # (if any) to keep the semantics predictable.
+    rows = bcc_controller.list_family_member_progresses(db, family_id=current_user.family_id)
+    return [BccMemberProgressOut(**row) for row in rows]

@@ -32,11 +32,6 @@ def get_member_with_bcc(db: Session, member_id: int) -> FamilyMember:
 
 
 def compute_member_progress(member: FamilyMember) -> tuple[list[int], list[int], bool, float]:
-    if member.bcc_class_participation:
-        completed = _BCC_CLASS_NUMBERS.copy()
-        missing: list[int] = []
-        return completed, missing, True, 100.0
-
     completed_set = {c.class_number for c in (member.bcc_class_completions or [])}
     completed = sorted(completed_set)
     missing = [n for n in _BCC_CLASS_NUMBERS if n not in completed_set]
@@ -79,9 +74,6 @@ def record_class_completion(
         member.bcc_class_completions.append(completion)
 
     completed, missing, is_complete, _ = compute_member_progress(member)
-    if is_complete and not member.bcc_class_participation:
-        member.bcc_class_participation = True
-
     db.commit()
     db.refresh(completion)
     return completion
@@ -128,6 +120,39 @@ def list_incomplete_members(
 
     results.sort(key=lambda r: (r["family_category"], r["family_name"], r["member_name"]))
     return results
+
+
+def list_family_member_progresses(
+    db: Session,
+    *,
+    family_id: int,
+) -> list[dict]:
+    members = (
+        db.query(FamilyMember)
+        .options(
+            joinedload(FamilyMember.bcc_class_completions),
+        )
+        .filter(FamilyMember.family_id == family_id)
+        .all()
+    )
+
+    rows: list[dict] = []
+    for member in members:
+        completed, missing, is_complete, completion_percent = compute_member_progress(member)
+        rows.append(
+            {
+                "member_id": member.id,
+                "member_name": member.name,
+                "family_id": member.family_id,
+                "completed_classes": completed,
+                "missing_classes": missing,
+                "is_complete": is_complete,
+                "completion_percent": completion_percent,
+            }
+        )
+
+    rows.sort(key=lambda r: r["member_name"])
+    return rows
 
 
 def get_family_completion_status(

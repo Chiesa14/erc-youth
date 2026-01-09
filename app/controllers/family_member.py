@@ -237,7 +237,10 @@ def create_user_from_member(db: Session, member_id: int, new_password: str) -> U
     """Create a user account from an existing family member"""
 
     # Get the family member and their invitation
-    member = db.query(FamilyMember).options(joinedload(FamilyMember.invitation)).filter(
+    member = db.query(FamilyMember).options(
+        joinedload(FamilyMember.invitation),
+        joinedload(FamilyMember.family),
+    ).filter(
         FamilyMember.id == member_id
     ).first()
 
@@ -268,6 +271,7 @@ def create_user_from_member(db: Session, member_id: int, new_password: str) -> U
         password=new_password,
         gender=member.gender,
         phone=member.phone,
+        family_id=member.family_id,
         family_category=member.family.category,
         family_name=member.family.name,
         role=RoleEnum.other,
