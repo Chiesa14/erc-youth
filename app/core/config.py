@@ -20,6 +20,8 @@ class Settings(BaseSettings):
 
     RESEND_API_KEY: str | None = None
 
+    EMAIL_BRAND_NAME:str = "YouthTrack"
+
     # URL Configuration with fallbacks
     ENVIRONMENT: str = "development"
     FRONTEND_URL: str = "http://127.0.0.1:8080"
