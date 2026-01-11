@@ -24,3 +24,4 @@ geopy~=2.4.0
 starlette~=0.47.2
 pyjwt
 qrcode~=7.4.2
+resend~=2.6.0

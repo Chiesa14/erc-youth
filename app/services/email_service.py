@@ -8,6 +8,11 @@ import secrets
 import string
 from app.core.config import settings  # Assuming you have email config here
 
+try:
+    import resend
+except Exception:  # pragma: no cover
+    resend = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,6 +23,58 @@ class EmailService:
         self.smtp_username = settings.SMTP_USERNAME
         self.smtp_password = settings.SMTP_PASSWORD
         self.from_email = settings.FROM_EMAIL
+        self.smtp_use_ssl = getattr(settings, "SMTP_USE_SSL", False)
+        self.resend_api_key = getattr(settings, "RESEND_API_KEY", None)
+
+    def _send_email_via_resend(self, to_email: str, subject: str, plain_body: str) -> bool:
+        if not self.resend_api_key:
+            return False
+        if resend is None:
+            logger.error("Resend is not installed but RESEND_API_KEY is set")
+            return False
+
+        try:
+            resend.api_key = self.resend_api_key
+
+            params = {
+                "from": self.from_email,
+                "to": [to_email],
+                "subject": subject,
+                "html": f"<pre>{plain_body}</pre>",
+            }
+            resend.Emails.send(params)
+            return True
+        except Exception as e:
+            logger.error(f"Error sending email via Resend: {str(e)}")
+            return False
+
+    def _send_email_via_smtp(self, to_email: str, subject: str, plain_body: str) -> bool:
+        server = None
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = self.from_email
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(plain_body, 'plain'))
+
+            if self.smtp_use_ssl:
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+            else:
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                server.starttls()
+
+            server.login(self.smtp_username, self.smtp_password)
+            server.sendmail(self.from_email, to_email, msg.as_string())
+            return True
+        except Exception as e:
+            logger.error(f"Error sending email via SMTP: {str(e)}")
+            return False
+        finally:
+            try:
+                if server is not None:
+                    server.quit()
+            except Exception:
+                pass
 
     def generate_temporary_password(self, length: int = 12) -> str:
         """Generate a secure temporary password"""
@@ -39,10 +96,7 @@ class EmailService:
             if frontend_url is None:
                 frontend_url = settings.frontend_change_password_url
             
-            msg = MIMEMultipart()
-            msg['From'] = self.from_email
-            msg['To'] = to_email
-            msg['Subject'] = f"Welcome to {family_name} family - Set Up Your Account"
+            subject = f"Welcome to {family_name} family - Set Up Your Account"
 
             encoded_temp_password = urllib.parse.quote(temp_password)
             activation_link = f"{frontend_url}?member_id={member_id}&temp_password={encoded_temp_password}"
@@ -66,15 +120,10 @@ class EmailService:
             Family Management System
             """
 
-            msg.attach(MIMEText(body, 'plain'))
-
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls()
-            server.login(self.smtp_username, self.smtp_password)
-            server.sendmail(self.from_email, to_email, msg.as_string())
-            server.quit()
-
-            return True
+            sent = self._send_email_via_resend(to_email=to_email, subject=subject, plain_body=body)
+            if sent:
+                return True
+            return self._send_email_via_smtp(to_email=to_email, subject=subject, plain_body=body)
         except Exception as e:
             logger.error(f"Error sending email: {str(e)}")
             return False
@@ -92,10 +141,7 @@ class EmailService:
             if frontend_url is None:
                 frontend_url = settings.frontend_change_password_url
 
-            msg = MIMEMultipart()
-            msg['From'] = self.from_email
-            msg['To'] = to_email
-            msg['Subject'] = "Welcome - Set Up Your Account"
+            subject = "Welcome - Set Up Your Account"
 
             encoded_temp_password = urllib.parse.quote(temp_password)
             activation_link = f"{frontend_url}?user_id={user_id}&temp_password={encoded_temp_password}"
@@ -117,15 +163,10 @@ class EmailService:
             YouthTrack
             """
 
-            msg.attach(MIMEText(body, 'plain'))
-
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls()
-            server.login(self.smtp_username, self.smtp_password)
-            server.sendmail(self.from_email, to_email, msg.as_string())
-            server.quit()
-
-            return True
+            sent = self._send_email_via_resend(to_email=to_email, subject=subject, plain_body=body)
+            if sent:
+                return True
+            return self._send_email_via_smtp(to_email=to_email, subject=subject, plain_body=body)
         except Exception as e:
             logger.error(f"Error sending email: {str(e)}")
             return False

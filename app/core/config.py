@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str
     SMTP_PASSWORD: str
     FROM_EMAIL: str
+    SMTP_USE_SSL: bool = False
+
+    RESEND_API_KEY: str | None = None
 
     # URL Configuration with fallbacks
     ENVIRONMENT: str = "development"
