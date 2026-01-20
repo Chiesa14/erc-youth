@@ -106,3 +106,11 @@ class PerformanceInsights(BaseModel):
     strengths: List[PerformanceInsight]
     improvements: List[PerformanceInsight]
     recommendations: List[PerformanceInsight]
+
+class CommissionCount(BaseModel):
+    commission: str
+    count: int
+
+class CommissionDistribution(BaseModel):
+    overall: List[CommissionCount]
+    by_category: Dict[str, List[CommissionCount]]

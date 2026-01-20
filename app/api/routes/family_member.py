@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, joinedload
 
@@ -23,6 +23,7 @@ from app.schemas.family_member import (
     AgeDistribution, MonthlyTrend
 )
 from app.services.email_service import EmailService
+from app.services.profile_upload import profile_upload_service
 from app.utils.timestamps import (
     parse_timestamp_filters,
     apply_timestamp_filters,
@@ -189,6 +190,50 @@ def delete_member(
         raise HTTPException(status_code=500, detail="Failed to delete member.")
 
 
+@router.post("/{member_id}/profile-photo", response_model=FamilyMemberOut)
+async def upload_member_profile_photo(
+    member_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Upload a profile photo for a family member."""
+    require_parent(current_user)
+
+    member = crud_member.get_family_member_by_id(db, member_id)
+    if not member or member.family_id != current_user.family_id:
+        raise HTTPException(status_code=404, detail="Family member not found.")
+
+    # Upload the photo
+    result = await profile_upload_service.upload_profile_photo(file, member_id)
+
+    # Update member's profile_photo field
+    member.profile_photo = result["file_url"]
+    db.commit()
+    db.refresh(member)
+
+    return FamilyMemberOut.model_validate(member)
+
+
+@router.delete("/{member_id}/profile-photo", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_member_profile_photo(
+    member_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a family member's profile photo."""
+    require_parent(current_user)
+
+    member = crud_member.get_family_member_by_id(db, member_id)
+    if not member or member.family_id != current_user.family_id:
+        raise HTTPException(status_code=404, detail="Family member not found.")
+
+    if member.profile_photo:
+        await profile_upload_service.delete_photo(member.profile_photo)
+        member.profile_photo = None
+        db.commit()
+
+
 @router.post("/activate", response_model=MemberActivationResponse)
 def activate_member_account(
         request: MemberActivationRequest,
@@ -337,26 +382,32 @@ def get_family_stats(family_id: int, db: Session = Depends(get_db)):
     ).all()
 
     total_with_dob = len(members_with_dob)
-    age_counts = {"0-12": 0, "13-18": 0, "19-25": 0, "35+": 0}
+    age_counts = {"20-22": 0, "23-25": 0, "26-30": 0, "31-35": 0, "36-40": 0, "40+": 0}
 
     if total_with_dob > 0:
         for member in members_with_dob:
             age = today.year - member.date_of_birth.year - (
                         (today.month, today.day) < (member.date_of_birth.month, member.date_of_birth.day))
-            if 0 <= age <= 12:
-                age_counts["0-12"] += 1
-            elif 13 <= age <= 18:
-                age_counts["13-18"] += 1
-            elif 19 <= age <= 25:
-                age_counts["19-25"] += 1
-            elif age >= 35:
-                age_counts["35+"] += 1
+            if 20 <= age <= 22:
+                age_counts["20-22"] += 1
+            elif 23 <= age <= 25:
+                age_counts["23-25"] += 1
+            elif 26 <= age <= 30:
+                age_counts["26-30"] += 1
+            elif 31 <= age <= 35:
+                age_counts["31-35"] += 1
+            elif 36 <= age <= 40:
+                age_counts["36-40"] += 1
+            elif age >= 41:
+                age_counts["40+"] += 1
 
     age_distribution_data = AgeDistribution(
-        zero_to_twelve=round((age_counts["0-12"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
-        thirteen_to_eighteen=round((age_counts["13-18"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
-        nineteen_to_twenty_five=round((age_counts["19-25"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
-        thirty_five_plus=round((age_counts["35+"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        twenty_to_twenty_two=round((age_counts["20-22"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        twenty_three_to_twenty_five=round((age_counts["23-25"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        twenty_six_to_thirty=round((age_counts["26-30"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        thirty_one_to_thirty_five=round((age_counts["31-35"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        thirty_six_to_forty=round((age_counts["36-40"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
+        forty_plus=round((age_counts["40+"] / total_with_dob * 100), 2) if total_with_dob > 0 else 0,
     )
 
     # --- New: Activity Trends Calculation (Last 6 Months) ---
@@ -391,10 +442,13 @@ def get_family_stats(family_id: int, db: Session = Depends(get_db)):
         month: MonthlyTrend(**counts) for month, counts in trends.items()
     }
 
+    bcc_graduate_percentage = round((bcc_graduate_count / total_members_count) * 100, 1) if total_members_count > 0 else 0
+
     return FamilyStats(
         total_members=total_members_count,
         monthly_members=monthly_members_count,
         bcc_graduate=bcc_graduate_count,
+        bcc_graduate_percentage=bcc_graduate_percentage,
         active_events=active_events_count,
         weekly_events=weekly_events_count,
         engagement=engagement_count,

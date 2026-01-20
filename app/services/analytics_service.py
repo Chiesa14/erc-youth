@@ -121,8 +121,8 @@ class AnalyticsService:
         else:
             family_engagement = 0
         
-        # Youth retention (members under 30 who are still active)
-        youth_cutoff_date = date.today() - timedelta(days=30*365)
+        # Young-adult retention (members up to 25; Mature is 26+ per SYSTEM.md)
+        youth_cutoff_date = date.today() - timedelta(days=25*365)
         
         if family_ids:
             total_youth = self.db.query(FamilyMember).filter(

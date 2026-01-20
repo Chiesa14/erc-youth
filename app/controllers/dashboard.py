@@ -276,9 +276,12 @@ class DashboardController:
             return []
         
         age_groups = {
-            "12-14 years": 0,
-            "15-17 years": 0,
-            "18+ years": 0
+            "20-22": 0,
+            "23-25": 0,
+            "26-30": 0,
+            "31-35": 0,
+            "36-40": 0,
+            "40+": 0,
         }
         
         for member in members:
@@ -286,12 +289,18 @@ class DashboardController:
             if (today.month, today.day) < (member.date_of_birth.month, member.date_of_birth.day):
                 age -= 1
                 
-            if 12 <= age <= 14:
-                age_groups["12-14 years"] += 1
-            elif 15 <= age <= 17:
-                age_groups["15-17 years"] += 1
-            elif age >= 18:
-                age_groups["18+ years"] += 1
+            if 20 <= age <= 22:
+                age_groups["20-22"] += 1
+            elif 23 <= age <= 25:
+                age_groups["23-25"] += 1
+            elif 26 <= age <= 30:
+                age_groups["26-30"] += 1
+            elif 31 <= age <= 35:
+                age_groups["31-35"] += 1
+            elif 36 <= age <= 40:
+                age_groups["36-40"] += 1
+            elif age >= 41:
+                age_groups["40+"] += 1
 
         total = len(members)
         
@@ -517,6 +526,8 @@ class DashboardController:
         # BCC graduates (completed all 7 classes)
         completed_ids = {row.member_id for row in self._bcc_completed_members_query().all()}
         bcc_graduate = len([m for m in family_members if m.id in completed_ids])
+
+        bcc_graduate_percentage = round((bcc_graduate / total_members) * 100, 1) if total_members > 0 else 0
         
         # Get family activities
         family_activities = self.db.query(Activity).filter(
@@ -546,10 +557,12 @@ class DashboardController:
         
         # Age distribution
         age_distribution = FamilyAgeDistribution(
-            zero_to_twelve=0,
-            thirteen_to_eighteen=0,
-            nineteen_to_twenty_five=0,
-            thirty_five_plus=0
+            twenty_to_twenty_two=0,
+            twenty_three_to_twenty_five=0,
+            twenty_six_to_thirty=0,
+            thirty_one_to_thirty_five=0,
+            thirty_six_to_forty=0,
+            forty_plus=0,
         )
         
         today = date.today()
@@ -559,14 +572,18 @@ class DashboardController:
                 if (today.month, today.day) < (member.date_of_birth.month, member.date_of_birth.day):
                     age -= 1
                     
-                if 0 <= age <= 12:
-                    age_distribution.zero_to_twelve += 1
-                elif 13 <= age <= 18:
-                    age_distribution.thirteen_to_eighteen += 1
-                elif 19 <= age <= 25:
-                    age_distribution.nineteen_to_twenty_five += 1
-                elif age >= 35:
-                    age_distribution.thirty_five_plus += 1
+                if 20 <= age <= 22:
+                    age_distribution.twenty_to_twenty_two += 1
+                elif 23 <= age <= 25:
+                    age_distribution.twenty_three_to_twenty_five += 1
+                elif 26 <= age <= 30:
+                    age_distribution.twenty_six_to_thirty += 1
+                elif 31 <= age <= 35:
+                    age_distribution.thirty_one_to_thirty_five += 1
+                elif 36 <= age <= 40:
+                    age_distribution.thirty_six_to_forty += 1
+                elif age >= 41:
+                    age_distribution.forty_plus += 1
         
         # Activity trends (last 6 months)
         activity_trends = {}
@@ -613,6 +630,7 @@ class DashboardController:
             total_members=total_members,
             monthly_members=monthly_members,
             bcc_graduate=bcc_graduate,
+            bcc_graduate_percentage=bcc_graduate_percentage,
             active_events=active_events,
             weekly_events=weekly_events,
             engagement=engagement,

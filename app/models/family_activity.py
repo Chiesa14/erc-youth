@@ -19,6 +19,14 @@ class Activity(Base):
     category = Column(Enum(ActivityCategoryEnum), nullable=False)
     type = Column(String, nullable=False)  # We'll store type as string, but validate on input
     description = Column(Text, nullable=True)
+    location = Column(String, nullable=True)
+    platform = Column(String, nullable=True)
+    days = Column(String, nullable=True)
+    preachers = Column(Text, nullable=True)
+    speakers = Column(Text, nullable=True)
+    budget = Column(Integer, nullable=True)
+    logistics = Column(Text, nullable=True)
+    is_recurring_monthly = Column(Integer, nullable=True)
 
     # Timestamp fields
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

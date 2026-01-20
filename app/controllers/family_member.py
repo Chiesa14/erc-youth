@@ -21,6 +21,16 @@ from app.utils.logging_decorator import log_create, log_update, log_delete, log_
 logger = logging.getLogger(__name__)
 
 
+def _derive_employment_status(employment_type):
+    if not employment_type:
+        return None
+    return getattr(employment_type, "value", employment_type)
+
+
+def _enum_value(value):
+    return getattr(value, "value", value)
+
+
 @log_create("family_members", "Created new family member")
 def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMember:
     existing_name = db.query(FamilyMember).filter(
@@ -45,7 +55,13 @@ def create_family_member(db: Session, member: FamilyMemberCreate) -> FamilyMembe
         if existing_email:
             raise HTTPException(status_code=400, detail="Email already in use.")
 
-    db_member = FamilyMember(**member.dict())
+    data = member.dict()
+    if data.get("bcc_class_status") is not None:
+        data["bcc_class_status"] = _enum_value(data.get("bcc_class_status"))
+    if not data.get("employment_status") and data.get("employment_type"):
+        data["employment_status"] = _derive_employment_status(data.get("employment_type"))
+
+    db_member = FamilyMember(**data)
     db.add(db_member)
     db.commit()
     db.refresh(db_member)
@@ -102,6 +118,12 @@ def update_family_member(
         return None
 
     update_data = updates.dict(exclude_unset=True)
+
+    if "bcc_class_status" in update_data and update_data.get("bcc_class_status") is not None:
+        update_data["bcc_class_status"] = _enum_value(update_data.get("bcc_class_status"))
+
+    if "employment_type" in update_data and not update_data.get("employment_status"):
+        update_data["employment_status"] = _derive_employment_status(update_data.get("employment_type"))
 
     # Validate name + family_id uniqueness
     if "name" in update_data or "family_id" in update_data:

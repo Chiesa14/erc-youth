@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
@@ -10,6 +10,7 @@ from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.user import RoleEnum
 from app.services.email_service import EmailService
+from app.services.profile_upload import profile_upload_service
 from app.utils.timestamps import (
     parse_timestamp_filters,
     apply_timestamp_filters,
@@ -102,6 +103,39 @@ def update_my_profile(
 ):
     updated_user = crud_user.update_user_profile(db=db, user=current_user, updates=updates)
     return updated_user
+
+
+@router.post("/profile-photo", response_model=user_schema.UserOut)
+async def upload_my_profile_photo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a profile photo for the current user."""
+    result = await profile_upload_service.upload_user_profile_photo(file, current_user.id)
+    
+    # Update user profile_pic
+    current_user.profile_pic = result["file_url"]
+    db.commit()
+    db.refresh(current_user)
+    
+    return current_user
+
+
+@router.delete("/profile-photo", response_model=user_schema.UserOut)
+async def delete_my_profile_photo(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Delete the current user's profile photo."""
+    if current_user.profile_pic:
+        await profile_upload_service.delete_photo(current_user.profile_pic)
+        
+    current_user.profile_pic = None
+    db.commit()
+    db.refresh(current_user)
+    
+    return current_user
 
 
 @router.put("/update-password/{user_id}", response_model=user_schema.UserOut)

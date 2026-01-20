@@ -132,6 +132,11 @@ def create_activity(
     else:
         activity_data = activity
 
+    if activity_data.is_recurring_monthly is not None:
+        activity_data = activity_data.model_copy(
+            update={"is_recurring_monthly": 1 if activity_data.is_recurring_monthly else 0}
+        )
+
     activity_data = activity_data.model_copy(
         update={
             "date": legacy_date,
@@ -501,6 +506,9 @@ def update_activity(
         raise HTTPException(status_code=403, detail="Not authorized to update this activity")
 
     update_payload = updated_data.dict(exclude_unset=True)
+
+    if "is_recurring_monthly" in update_payload and update_payload["is_recurring_monthly"] is not None:
+        update_payload["is_recurring_monthly"] = 1 if update_payload["is_recurring_monthly"] else 0
 
     if "date" in update_payload and update_payload["date"] is not None and update_payload["date"] < date.today():
         raise HTTPException(status_code=400, detail="Cannot set activity date in the past.")

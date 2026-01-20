@@ -14,6 +14,49 @@ from app.utils.timestamps import to_iso_format, add_timestamps_to_dict
 from app.utils.logging_decorator import log_create, log_update, log_delete, log_view
 
 
+def _resolve_leader_member(db: Session, family_id: int, user: User | None) -> FamilyMember | None:
+    if not user:
+        return None
+
+    if user.email:
+        m = (
+            db.query(FamilyMember)
+            .filter(
+                FamilyMember.family_id == family_id,
+                FamilyMember.email == user.email,
+            )
+            .first()
+        )
+        if m:
+            return m
+
+    if user.phone:
+        m = (
+            db.query(FamilyMember)
+            .filter(
+                FamilyMember.family_id == family_id,
+                FamilyMember.phone == user.phone,
+            )
+            .first()
+        )
+        if m:
+            return m
+
+    if user.full_name:
+        m = (
+            db.query(FamilyMember)
+            .filter(
+                FamilyMember.family_id == family_id,
+                FamilyMember.name == user.full_name,
+            )
+            .first()
+        )
+        if m:
+            return m
+
+    return None
+
+
 @log_view("families", "Viewed all families")
 def get_all_families(db: Session) -> List[FamilyResponse]:
     last_activity_subquery = (
@@ -56,6 +99,20 @@ def get_all_families(db: Session) -> List[FamilyResponse]:
 
         pere = pere_user.full_name if pere_user else None
         mere = mere_user.full_name if mere_user else None
+        pere_member = _resolve_leader_member(db, family.id, pere_user)
+        mere_member = _resolve_leader_member(db, family.id, mere_user)
+
+        if pere_member and pere_member.name:
+            pere = pere_member.name
+        if mere_member and mere_member.name:
+            mere = mere_member.name
+
+        pere_pic = (pere_member.profile_photo if pere_member else None) or (
+            pere_user.profile_pic if pere_user else None
+        )
+        mere_pic = (mere_member.profile_photo if mere_member else None) or (
+            mere_user.profile_pic if mere_user else None
+        )
 
         members = [member.name for member in family.members]
         activities = [
@@ -82,8 +139,11 @@ def get_all_families(db: Session) -> List[FamilyResponse]:
             id=family.id,
             name=family.name,
             category=family.category,
+            cover_photo=family.cover_photo,
             pere=pere,
             mere=mere,
+            pere_pic=pere_pic,
+            mere_pic=mere_pic,
             members=members,
             activities=activities,
             last_activity_date=last_activity_date
@@ -138,6 +198,21 @@ def get_family_by_id(db: Session, family_id: int) -> FamilyResponse:
     pere = pere_user.full_name if pere_user else None
     mere = mere_user.full_name if mere_user else None
 
+    pere_member = _resolve_leader_member(db, family.id, pere_user)
+    mere_member = _resolve_leader_member(db, family.id, mere_user)
+
+    if pere_member and pere_member.name:
+        pere = pere_member.name
+    if mere_member and mere_member.name:
+        mere = mere_member.name
+
+    pere_pic = (pere_member.profile_photo if pere_member else None) or (
+        pere_user.profile_pic if pere_user else None
+    )
+    mere_pic = (mere_member.profile_photo if mere_member else None) or (
+        mere_user.profile_pic if mere_user else None
+    )
+
     members = [member.name for member in family.members]
     activities = [
         ActivityResponse(
@@ -163,8 +238,11 @@ def get_family_by_id(db: Session, family_id: int) -> FamilyResponse:
         id=family.id,
         name=family.name,
         category=family.category,
+        cover_photo=family.cover_photo,
         pere=pere,
         mere=mere,
+        pere_pic=pere_pic,
+        mere_pic=mere_pic,
         members=members,
         activities=activities,
         last_activity_date=last_activity_date

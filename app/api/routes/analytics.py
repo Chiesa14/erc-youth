@@ -4,6 +4,7 @@ Provides comprehensive analytics data for the frontend dashboard.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import date, datetime, timedelta
@@ -13,6 +14,9 @@ from app.core.security import get_current_active_user
 from app.models.user import User
 from app.schemas.user import RoleEnum
 from app.services.analytics_service import AnalyticsService
+from app.models.family_member import FamilyMember
+from app.models.family import Family
+from app.schemas.analytics import CommissionDistribution, CommissionCount
 from app.schemas.analytics import (
     ChurchPerformanceAnalytics,
     AnalyticsFilters,
@@ -22,6 +26,55 @@ from app.schemas.analytics import (
 )
 
 router = APIRouter(tags=["Church Analytics"])
+
+
+@router.get("/commissions", response_model=CommissionDistribution)
+def get_commission_distribution(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get commission distribution overall and by family category.
+
+    Only accessible to church pastor and admin.
+    """
+
+    if current_user.role not in {RoleEnum.church_pastor, RoleEnum.admin}:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    rows = (
+        db.query(
+            Family.category.label("category"),
+            FamilyMember.commission.label("commission"),
+            func.count(FamilyMember.id).label("count"),
+        )
+        .join(Family, Family.id == FamilyMember.family_id)
+        .filter(FamilyMember.commission.isnot(None))
+        .filter(FamilyMember.commission != "")
+        .group_by(Family.category, FamilyMember.commission)
+        .all()
+    )
+
+    by_category = {}
+    overall_counts = {}
+    for category, commission, count in rows:
+        overall_counts[commission] = overall_counts.get(commission, 0) + int(count)
+        by_category.setdefault(category, {})
+        by_category[category][commission] = by_category[category].get(commission, 0) + int(count)
+
+    overall = [
+        CommissionCount(commission=c, count=cnt)
+        for c, cnt in sorted(overall_counts.items(), key=lambda x: (-x[1], x[0]))
+    ]
+
+    by_category_out = {
+        cat: [
+            CommissionCount(commission=c, count=cnt)
+            for c, cnt in sorted(commissions.items(), key=lambda x: (-x[1], x[0]))
+        ]
+        for cat, commissions in by_category.items()
+    }
+
+    return CommissionDistribution(overall=overall, by_category=by_category_out)
 
 
 @router.get("/performance", response_model=ChurchPerformanceAnalytics)

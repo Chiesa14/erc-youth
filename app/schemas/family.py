@@ -21,8 +21,11 @@ class FamilyResponse(BaseModel, TimestampMixin):
     id: int
     name: str
     category: str
+    cover_photo: Optional[str] = None  # Path to family cover photo
     pere: Optional[str]
     mere: Optional[str]
+    pere_pic: Optional[str] = None
+    mere_pic: Optional[str] = None
     members: List[str]
     activities: List[ActivityResponse]
     last_activity_date: Optional[date]
@@ -33,10 +36,12 @@ class FamilyResponse(BaseModel, TimestampMixin):
 class FamilyCreate(BaseModel):
     name: str
     category: str
+    cover_photo: Optional[str] = None
 
 class FamilyUpdate(BaseModel):
-    name: Optional[str]
-    category: Optional[str]
+    name: Optional[str] = None
+    category: Optional[str] = None
+    cover_photo: Optional[str] = None
 
 class FamilyMemberCreate(BaseModel):
     name: str

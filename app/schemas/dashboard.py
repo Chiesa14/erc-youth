@@ -88,10 +88,12 @@ class AdminDashboardData(BaseModel):
 
 # Parent Dashboard Schemas
 class FamilyAgeDistribution(BaseModel):
-    zero_to_twelve: int
-    thirteen_to_eighteen: int
-    nineteen_to_twenty_five: int
-    thirty_five_plus: int
+    twenty_to_twenty_two: int
+    twenty_three_to_twenty_five: int
+    twenty_six_to_thirty: int
+    thirty_one_to_thirty_five: int
+    thirty_six_to_forty: int
+    forty_plus: int
 
 
 class MonthlyTrend(BaseModel):
@@ -103,6 +105,7 @@ class FamilyStats(BaseModel):
     total_members: int
     monthly_members: int
     bcc_graduate: int
+    bcc_graduate_percentage: float
     active_events: int
     weekly_events: int
     engagement: int

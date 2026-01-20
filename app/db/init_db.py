@@ -2,10 +2,23 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models.user import User
 from app.models.family_role import FamilyRole
+from app.models.anti_drugs_unit import (
+    AntiDrugsActivity,
+    AntiDrugsTestimony,
+    AntiDrugsOutreachPlan,
+)
+from app.models.worship_team import WorshipTeamActivity
+from app.models.organization import (
+    OrganizationPosition,
+    SmallCommittee,
+    SmallCommitteeDepartment,
+    SmallCommitteeMember,
+)
 from app.schemas.user import RoleEnum, GenderEnum, FamilyCategoryEnum
 from app.core.security import get_password_hash
 from app.db.session import SessionLocal, Base, engine
 from app.core.timestamp_middleware import init_timestamp_middleware
+from app.db.seed_families import seed_families
 import logging
 
 logger = logging.getLogger(__name__)
@@ -52,6 +65,26 @@ def _ensure_family_activities_date_range_columns() -> None:
             else:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN end_date DATE"))
 
+        columns_to_add: list[tuple[str, str]] = [
+            ("location", "VARCHAR"),
+            ("platform", "VARCHAR"),
+            ("days", "VARCHAR"),
+            ("preachers", "TEXT"),
+            ("speakers", "TEXT"),
+            ("budget", "INTEGER"),
+            ("logistics", "TEXT"),
+            ("is_recurring_monthly", "INTEGER"),
+        ]
+
+        for col_name, col_type in columns_to_add:
+            if col_name in existing:
+                continue
+
+            if dialect in {"postgresql", "postgres"}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            else:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+
         conn.execute(text(f"UPDATE {table} SET start_date = \"date\" WHERE start_date IS NULL"))
         conn.execute(text(f"UPDATE {table} SET end_date = \"date\" WHERE end_date IS NULL"))
 
@@ -78,6 +111,67 @@ def _ensure_users_name_and_role_columns() -> None:
             else:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
 
+
+def _ensure_family_member_extended_columns() -> None:
+    """Add new columns for family members per SYSTEM.md documentation."""
+    table = "family_members"
+    with engine.begin() as conn:
+        existing = _get_table_columns(conn, table)
+        dialect = conn.dialect.name
+
+        # All new columns from documentation
+        columns_to_add: list[tuple[str, str]] = [
+            ("id_name", "VARCHAR"),
+            ("deliverance_name", "VARCHAR"),
+            ("profile_photo", "VARCHAR"),
+            ("district", "VARCHAR"),
+            ("sector", "VARCHAR"),
+            ("cell", "VARCHAR"),
+            ("village", "VARCHAR"),
+            ("living_arrangement", "VARCHAR"),
+            ("bcc_class_status", "VARCHAR"),
+            ("commission", "VARCHAR"),
+            ("parent_guardian_status", "VARCHAR"),
+            ("employment_type", "VARCHAR"),
+            ("job_title", "VARCHAR"),
+            ("organization", "VARCHAR"),
+            ("business_type", "VARCHAR"),
+            ("business_name", "VARCHAR"),
+            ("work_type", "VARCHAR"),
+            ("work_description", "VARCHAR"),
+            ("work_location", "VARCHAR"),
+            ("institution", "VARCHAR"),
+            ("program", "VARCHAR"),
+            ("student_level", "VARCHAR"),
+        ]
+
+        for col_name, col_type in columns_to_add:
+            if col_name in existing:
+                continue
+
+            if dialect in {"postgresql", "postgres"}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            else:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+        
+        logger.info("Family member extended columns ensured.")
+
+
+def _ensure_family_cover_photo_column() -> None:
+    """Add cover_photo column to families table."""
+    table = "families"
+    with engine.begin() as conn:
+        existing = _get_table_columns(conn, table)
+        dialect = conn.dialect.name
+
+        if "cover_photo" not in existing:
+            if dialect in {"postgresql", "postgres"}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS cover_photo VARCHAR"))
+            else:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN cover_photo VARCHAR"))
+            logger.info("Added cover_photo column to families table.")
+
+
 def init_db():
     # Initialize timestamp middleware
     init_timestamp_middleware()
@@ -85,8 +179,11 @@ def init_db():
     # Create tables
     Base.metadata.create_all(bind=engine)
 
+    # Run migrations for new columns
     _ensure_family_activities_date_range_columns()
     _ensure_users_name_and_role_columns()
+    _ensure_family_member_extended_columns()
+    _ensure_family_cover_photo_column()
 
     db: Session = SessionLocal()
 
@@ -127,6 +224,7 @@ def init_db():
 
     db.commit()
 
+    # Seed default family roles
     default_family_roles: list[tuple[str, RoleEnum]] = [
         ("Pere", RoleEnum.pere),
         ("Mere", RoleEnum.mere),
@@ -141,4 +239,8 @@ def init_db():
             db.add(FamilyRole(name=name, system_role=system_role))
 
     db.commit()
+
+    # Seed all families from documentation
+    seed_families(db)
+
     db.close()

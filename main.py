@@ -4,7 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 import asyncio
 import os
 
-from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback, config, dashboard, public_checkin, public_qr, family_role, bcc
+from app.api.routes import user, auth, family_member, family_activity ,family_document, announcement, shared_document,family,prayer_chain, timestamp_analytics, chat, websocket, analytics, recommendation, feedback, config, dashboard, public_checkin, public_qr, family_role, bcc, anti_drugs_unit, worship_team, organization
 from app.api.endpoints import system_logs
 from app.core.logging_middleware import LoggingMiddleware
 from dotenv import load_dotenv
@@ -60,6 +60,9 @@ app.include_router(websocket.router, prefix="/chat", tags=["WebSocket"])
 app.include_router(recommendation.router, prefix="/recommendations", tags=["Recommendations"])
 app.include_router(feedback.router, prefix="/feedback", tags=["Feedback"])
 app.include_router(bcc.router, prefix="/bcc", tags=["BCC"])
+app.include_router(organization.router, prefix="/organization", tags=["Organization"])
+app.include_router(anti_drugs_unit.router, prefix="/youth/anti-drugs", tags=["Anti-Drugs Unit"])
+app.include_router(worship_team.router, prefix="/youth/worship-team", tags=["Worship Team"])
 app.include_router(system_logs.router, prefix="/api/system-logs", tags=["System Logs"])
 app.include_router(config.router, prefix="/api/config", tags=["Configuration"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])

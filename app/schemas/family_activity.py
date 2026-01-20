@@ -14,6 +14,12 @@ class SpiritualTypeEnum(str, Enum):
     overnight = "Overnights"
     crusade = "Crusades"
     agape_event = "Agape events"
+    retreat = "Retreats"
+    fellowship = "Fellowship"
+    bible_study = "Bible Study"
+    morning_glory = "Morning Glory"
+    three_hours_prayer = "3 Hours of Prayer"
+    conference = "Conference"
 
 class SocialTypeEnum(str, Enum):
     contribution = "Contributions"
@@ -21,6 +27,11 @@ class SocialTypeEnum(str, Enum):
     bereavement = "Bereavements"
     wedding = "Weddings"
     transfer = "Transfers"
+    evangelization = "Evangelization"
+    sports_activities = "Sports Activities"
+    picnic_dinner = "Picnic/Dinner"
+    community_awareness = "Community Awareness"
+    rehabilitation = "Rehabilitation Center"
 
 class ActivityStatusEnum(str, Enum):
     planned = "Planned"
@@ -40,6 +51,14 @@ class ActivityBase(BaseModel):
     category: ActivityCategoryEnum
     type: str  # will validate in controller if matches category
     description: Optional[str] = None
+    location: Optional[str] = None
+    platform: Optional[str] = None
+    days: Optional[str] = None
+    preachers: Optional[str] = None
+    speakers: Optional[str] = None
+    budget: Optional[int] = None
+    logistics: Optional[str] = None
+    is_recurring_monthly: Optional[bool] = None
 
 class ActivityCreate(BaseModel):
     date: Optional[Date] = None
@@ -51,6 +70,14 @@ class ActivityCreate(BaseModel):
     category: ActivityCategoryEnum
     type: str                   # Example: 'Prayer calendar', 'Illness', etc.
     description: Optional[str] = None
+    location: Optional[str] = None
+    platform: Optional[str] = None
+    days: Optional[str] = None
+    preachers: Optional[str] = None
+    speakers: Optional[str] = None
+    budget: Optional[int] = None
+    logistics: Optional[str] = None
+    is_recurring_monthly: Optional[bool] = None
     family_id: Optional[int] = None
 
 class ActivityUpdate(BaseModel):
@@ -63,6 +90,14 @@ class ActivityUpdate(BaseModel):
     category: Optional[ActivityCategoryEnum] = None
     type: Optional[str] = None
     description: Optional[str] = None
+    location: Optional[str] = None
+    platform: Optional[str] = None
+    days: Optional[str] = None
+    preachers: Optional[str] = None
+    speakers: Optional[str] = None
+    budget: Optional[int] = None
+    logistics: Optional[str] = None
+    is_recurring_monthly: Optional[bool] = None
 
 class ActivityOut(ActivityBase, TimestampMixin):
     id: int

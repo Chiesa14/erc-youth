@@ -7,6 +7,9 @@ from .recommendation import Program, Comment
 from .feedback import Feedback, Reply
 from .system_log import SystemLog
 from .family_role import FamilyRole
+from .anti_drugs_unit import AntiDrugsActivity, AntiDrugsTestimony, AntiDrugsOutreachPlan
+from .worship_team import WorshipTeamActivity
+from .organization import OrganizationPosition, SmallCommittee, SmallCommitteeDepartment, SmallCommitteeMember
 
 Family.activities = relationship("Activity", back_populates="family", cascade="all, delete")
 Activity.family = relationship("Family", back_populates="activities")
@@ -26,3 +29,4 @@ Reply.feedback = relationship("Feedback", back_populates="replies")
 # System logging relationships
 Family.system_logs = relationship("SystemLog", back_populates="family")
 SystemLog.family = relationship("Family", back_populates="system_logs")
+

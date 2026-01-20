@@ -39,19 +39,76 @@ class GraduationModeEnum(str, Enum):
     online = "Online"
     physical = "Physical"
 
+class BccClassStatusEnum(str, Enum):
+    graduate = "Graduate"
+    ongoing = "Ongoing"
+    not_yet_started = "Not yet Started"
+
+class ParentGuardianStatusEnum(str, Enum):
+    both_parents = "Both Parents"
+    one_parent = "One Parent"
+    stepfamily = "Stepfamily"
+    grandparents = "Grandparents"
+    guardian = "Guardian (Non-relative)"
+    none = "None"
+
+class EmploymentTypeEnum(str, Enum):
+    full_time_employed = "Full-Time Employed"
+    full_time_self_employed = "Full-Time Self-Employed"
+    freelance = "Freelance"
+    part_time = "Part-Time"
+    temporary = "Temporary"
+    contract = "Contract for a Specific Period"
+    unemployed = "Unemployed"
+    student = "Student"
+
 class FamilyMemberBase(BaseModel):
     name: str
+    id_name: Optional[str] = None  # ID Name from docs
+    deliverance_name: Optional[str] = None  # Deliverance/Spiritual name
     phone: str  # required
     email: Optional[EmailStr] = None  # optional
+    profile_photo: Optional[str] = None  # Path to uploaded profile photo
+    
+    # Residence details (district/sector/cell/village)
     home_address: Optional[str] = None
+    district: Optional[str] = None
+    sector: Optional[str] = None
+    cell: Optional[str] = None
+    village: Optional[str] = None
+    living_arrangement: Optional[str] = None  # e.g., "with family", "alone"
+    
     date_of_birth: date
     gender: GenderEnum
-    education_level: Optional[str] = None
-    employment_status: Optional[str] = None
+    
+    # BCC Classes
+    education_level: Optional[EducationLevelEnum] = None
     bcc_class_participation: Optional[bool] = None
+    bcc_class_status: Optional[BccClassStatusEnum] = None
     year_of_graduation: Optional[int] = None
     graduation_mode: Optional[GraduationModeEnum] = None
-    parental_status: bool
+    
+    # Commission and Parent/Guardian
+    commission: Optional[str] = None  # Church commission assignment
+    parent_guardian_status: Optional[ParentGuardianStatusEnum] = None
+    parental_status: Optional[bool] = None  # Keep for backwards compatibility
+    
+    # Occupation - detailed fields per docs
+    employment_status: Optional[str] = None
+    employment_type: Optional[EmploymentTypeEnum] = None
+    job_title: Optional[str] = None
+    organization: Optional[str] = None
+    business_type: Optional[str] = None
+    business_name: Optional[str] = None
+    work_type: Optional[str] = None  # For freelance
+    work_description: Optional[str] = None
+    work_location: Optional[str] = None
+    
+    # Student fields
+    institution: Optional[str] = None
+    program: Optional[str] = None
+    student_level: Optional[str] = None
+    
     family_id: Optional[int] = None
 
 class FamilyMemberCreate(FamilyMemberBase):
@@ -85,10 +142,12 @@ class MemberActivationResponse(BaseModel):
     user_id: int
 
 class AgeDistribution(BaseModel):
-    zero_to_twelve: float
-    thirteen_to_eighteen: float
-    nineteen_to_twenty_five: float
-    thirty_five_plus: float
+    twenty_to_twenty_two: float
+    twenty_three_to_twenty_five: float
+    twenty_six_to_thirty: float
+    thirty_one_to_thirty_five: float
+    thirty_six_to_forty: float
+    forty_plus: float
 
 class MonthlyTrend(BaseModel):
     spiritual: int
@@ -98,6 +157,7 @@ class FamilyStats(BaseModel):
     total_members:int
     monthly_members:int
     bcc_graduate: int
+    bcc_graduate_percentage: float
     active_events:int
     weekly_events:int
     engagement:int

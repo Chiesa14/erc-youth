@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.family import Family
 
 from app.schemas.family import FamilyResponse, FamilyCreate, FamilyUpdate
+from app.services.profile_upload import profile_upload_service
 from app.utils.timestamps import (
     parse_timestamp_filters,
     apply_timestamp_filters,
@@ -106,3 +107,55 @@ def delete_existing_family(
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting family: {str(e)}")
+
+
+@router.post("/{family_id}/cover-photo", response_model=FamilyResponse)
+async def upload_family_cover_photo(
+    family_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user)
+):
+    """Upload a cover photo for a family."""
+    try:
+        family = db.query(Family).filter(Family.id == family_id).first()
+        if not family:
+            raise HTTPException(status_code=404, detail="Family not found")
+
+        # Upload the photo
+        result = await profile_upload_service.upload_family_cover_photo(file, family_id)
+
+        # Update family's cover_photo field
+        family.cover_photo = result["file_url"]
+        db.commit()
+        db.refresh(family)
+
+        return get_family_by_id(db, family_id)
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading cover photo: {str(e)}")
+
+
+@router.delete("/{family_id}/cover-photo", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_family_cover_photo(
+    family_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user)
+):
+    """Delete a family's cover photo."""
+    try:
+        family = db.query(Family).filter(Family.id == family_id).first()
+        if not family:
+            raise HTTPException(status_code=404, detail="Family not found")
+
+        if family.cover_photo:
+            await profile_upload_service.delete_photo(family.cover_photo)
+            family.cover_photo = None
+            db.commit()
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting cover photo: {str(e)}")
