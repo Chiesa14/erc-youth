@@ -13,6 +13,12 @@ from app.schemas.worship_team import (
     WorshipTeamActivityOut,
     WorshipTeamActivityCreate,
     WorshipTeamActivityUpdate,
+    WorshipTeamMemberOut,
+    WorshipTeamMemberCreate,
+    WorshipTeamMemberUpdate,
+    WorshipTeamSongOut,
+    WorshipTeamSongCreate,
+    WorshipTeamSongUpdate,
     ActivityFrequencyEnum,
 )
 
@@ -83,3 +89,75 @@ def delete_worship_team_activity(
     current_user: User = Depends(require_youth_committee),
 ):
     crud.delete_activity(db, activity_id)
+
+
+@router.get("/members", response_model=list[WorshipTeamMemberOut])
+def list_worship_team_members(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return crud.list_members(db)
+
+
+@router.post("/members", response_model=WorshipTeamMemberOut, status_code=status.HTTP_201_CREATED)
+def create_worship_team_member(
+    payload: WorshipTeamMemberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_youth_committee),
+):
+    return crud.create_member(db, payload)
+
+
+@router.put("/members/{member_id}", response_model=WorshipTeamMemberOut)
+def update_worship_team_member(
+    member_id: int,
+    payload: WorshipTeamMemberUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_youth_committee),
+):
+    return crud.update_member(db, member_id, payload)
+
+
+@router.delete("/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_worship_team_member(
+    member_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_youth_committee),
+):
+    crud.delete_member(db, member_id)
+
+
+@router.get("/songs", response_model=list[WorshipTeamSongOut])
+def list_worship_team_songs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return crud.list_songs(db)
+
+
+@router.post("/songs", response_model=WorshipTeamSongOut, status_code=status.HTTP_201_CREATED)
+def create_worship_team_song(
+    payload: WorshipTeamSongCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_youth_committee),
+):
+    return crud.create_song(db, payload)
+
+
+@router.put("/songs/{song_id}", response_model=WorshipTeamSongOut)
+def update_worship_team_song(
+    song_id: int,
+    payload: WorshipTeamSongUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_youth_committee),
+):
+    return crud.update_song(db, song_id, payload)
+
+
+@router.delete("/songs/{song_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_worship_team_song(
+    song_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_youth_committee),
+):
+    crud.delete_song(db, song_id)

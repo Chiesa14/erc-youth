@@ -8,7 +8,7 @@ from .feedback import Feedback, Reply
 from .system_log import SystemLog
 from .family_role import FamilyRole
 from .anti_drugs_unit import AntiDrugsActivity, AntiDrugsTestimony, AntiDrugsOutreachPlan
-from .worship_team import WorshipTeamActivity
+from .worship_team import WorshipTeamActivity, WorshipTeamMember, WorshipTeamSong
 from .organization import OrganizationPosition, SmallCommittee, SmallCommitteeDepartment, SmallCommitteeMember
 
 Family.activities = relationship("Activity", back_populates="family", cascade="all, delete")

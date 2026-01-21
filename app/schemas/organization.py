@@ -82,6 +82,7 @@ class SmallCommitteeCreate(SmallCommitteeBase):
 class SmallCommitteeUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    departments: Optional[List[SmallCommitteeDepartmentCreate]] = None
 
 
 class SmallCommitteeOut(SmallCommitteeBase, TimestampMixin):

@@ -47,3 +47,49 @@ class WorshipTeamActivityOut(WorshipTeamActivityBase, TimestampMixin):
 
     class Config:
         from_attributes = True
+
+
+class WorshipTeamMemberBase(BaseModel):
+    name: str
+    role: str
+    instrument: str
+
+
+class WorshipTeamMemberCreate(WorshipTeamMemberBase):
+    pass
+
+
+class WorshipTeamMemberUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    instrument: Optional[str] = None
+
+
+class WorshipTeamMemberOut(WorshipTeamMemberBase, TimestampMixin):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class WorshipTeamSongBase(BaseModel):
+    title: str
+    artist: str
+    category: str
+
+
+class WorshipTeamSongCreate(WorshipTeamSongBase):
+    pass
+
+
+class WorshipTeamSongUpdate(BaseModel):
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    category: Optional[str] = None
+
+
+class WorshipTeamSongOut(WorshipTeamSongBase, TimestampMixin):
+    id: int
+
+    class Config:
+        from_attributes = True

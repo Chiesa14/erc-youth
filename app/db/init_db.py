@@ -7,7 +7,7 @@ from app.models.anti_drugs_unit import (
     AntiDrugsTestimony,
     AntiDrugsOutreachPlan,
 )
-from app.models.worship_team import WorshipTeamActivity
+from app.models.worship_team import WorshipTeamActivity, WorshipTeamMember, WorshipTeamSong
 from app.models.organization import (
     OrganizationPosition,
     SmallCommittee,

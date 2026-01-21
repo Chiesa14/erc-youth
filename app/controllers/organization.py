@@ -93,16 +93,56 @@ def create_small_committee(db: Session, payload: SmallCommitteeCreate):
 
 
 def update_small_committee(db: Session, committee_id: int, payload: SmallCommitteeUpdate):
-    committee = db.query(SmallCommittee).filter(SmallCommittee.id == committee_id).first()
+    committee = (
+        db.query(SmallCommittee)
+        .options(joinedload(SmallCommittee.departments).joinedload(SmallCommitteeDepartment.members))
+        .filter(SmallCommittee.id == committee_id)
+        .first()
+    )
     if not committee:
         raise HTTPException(status_code=404, detail="Small committee not found")
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(committee, key, value)
+    update_data = payload.model_dump(exclude_unset=True)
+
+    if "name" in update_data:
+        committee.name = update_data["name"]
+    if "description" in update_data:
+        committee.description = update_data["description"]
+
+    if "departments" in update_data:
+        departments = update_data.get("departments")
+        committee.departments.clear()
+        db.flush()
+
+        if departments:
+            for dept in departments:
+                dept_name = (dept.get("name") or "").strip()
+                if not dept_name:
+                    continue
+
+                db_dept = SmallCommitteeDepartment(name=dept_name)
+                for m in dept.get("members") or []:
+                    member_name = (m.get("member_name") or "").strip() if m.get("member_name") is not None else ""
+                    if not member_name and not m.get("family_member_id"):
+                        continue
+
+                    db_member = SmallCommitteeMember(
+                        family_member_id=m.get("family_member_id"),
+                        member_name=m.get("member_name"),
+                        role=m.get("role"),
+                    )
+                    db_dept.members.append(db_member)
+
+                committee.departments.append(db_dept)
 
     db.commit()
-    db.refresh(committee)
-    return committee
+
+    return (
+        db.query(SmallCommittee)
+        .options(joinedload(SmallCommittee.departments).joinedload(SmallCommitteeDepartment.members))
+        .filter(SmallCommittee.id == committee.id)
+        .first()
+    )
 
 
 def delete_small_committee(db: Session, committee_id: int) -> None:

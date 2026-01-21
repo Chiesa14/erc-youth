@@ -103,7 +103,7 @@ def list_anti_drugs_testimonies(
 def create_anti_drugs_testimony(
     payload: AntiDrugsTestimonyCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_youth_committee),
+    current_user: User = Depends(get_current_active_user),
 ):
     return crud.create_testimony(db, payload)
 
